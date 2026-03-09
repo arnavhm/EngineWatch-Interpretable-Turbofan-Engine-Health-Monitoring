@@ -11,8 +11,43 @@ Assumptions:
 from pathlib import Path
 from typing import Tuple
 
+import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+
+
+def _validate_preprocess_config(config: dict) -> None:
+    """
+    Validate required preprocessing config keys early.
+
+    Purpose:
+        Fail fast when mandatory configuration entries are missing.
+    Input shape:
+        Config dictionary loaded from YAML.
+    Output shape:
+        None.
+    Assumptions:
+        Config follows project structure.
+    Failure conditions:
+        Raises KeyError or ValueError for missing/invalid fields.
+    """
+    required_top_level = ["selected_sensors", "dataset"]
+    for key in required_top_level:
+        if key not in config:
+            raise KeyError(f"Missing config key: {key}")
+
+    if (
+        not isinstance(config["selected_sensors"], list)
+        or not config["selected_sensors"]
+    ):
+        raise ValueError("config['selected_sensors'] must be a non-empty list")
+
+    required_dataset_keys = ["processed_path", "name"]
+    missing_dataset_keys = [
+        key for key in required_dataset_keys if key not in config["dataset"]
+    ]
+    if missing_dataset_keys:
+        raise KeyError(f"Missing dataset config keys: {missing_dataset_keys}")
 
 
 def compute_rul(df: pd.DataFrame) -> pd.DataFrame:
@@ -72,7 +107,7 @@ def select_sensors(df: pd.DataFrame, selected_sensors: list[str]) -> pd.DataFram
     if missing_sensors:
         raise KeyError(f"Configured sensors not found in dataframe: {missing_sensors}")
 
-    output_columns = base_columns + selected_sensors
+    output_columns = ["unit", "cycle"] + list(selected_sensors)
     if "RUL" in df.columns:
         output_columns.append("RUL")
 
@@ -173,6 +208,8 @@ def preprocess_train(
     Failure conditions:
         Raises KeyError for missing config/columns and downstream scaling or I/O errors.
     """
+    _validate_preprocess_config(config)
+
     sensor_cols: list[str] = config["selected_sensors"]
 
     train_with_rul = compute_rul(df)
@@ -185,6 +222,11 @@ def preprocess_train(
     dataset_name = config["dataset"]["name"]
     output_file = processed_path / f"train_{dataset_name}_processed.parquet"
     save_processed(train_processed, str(output_file))
+
+    if config.get("save_scaler", False):
+        scaler_path = Path(config.get("scaler_path", "models/scaler.joblib"))
+        scaler_path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(scaler, scaler_path)
 
     return train_processed, scaler, sensor_cols
 
@@ -206,6 +248,8 @@ def preprocess_test(
     Failure conditions:
         Raises KeyError for missing config/columns and downstream scaling or I/O errors.
     """
+    _validate_preprocess_config(config)
+
     sensor_cols: list[str] = config["selected_sensors"]
 
     test_selected = select_sensors(df, sensor_cols)

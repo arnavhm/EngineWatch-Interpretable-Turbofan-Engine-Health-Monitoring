@@ -7,18 +7,20 @@ Assumptions : Files are space separated, 26 columns, no missing values.
 """
 
 from pathlib import Path
+from typing import Union
 import pandas as pd
 import yaml
 
 
-def load_config(config_path: str = "config/config.yaml") -> dict:
+def load_config(config_path: Union[str, Path] = "config/config.yaml") -> dict:
     """
     Load central YAML configuration.
 
-    Input : Path string to config.yaml
+    Input : Path string or Path object to config.yaml
     Output: dict
     """
-    with open(config_path, "r") as f:
+    path = Path(config_path)
+    with open(path, "r") as f:
         return yaml.safe_load(f)
 
 

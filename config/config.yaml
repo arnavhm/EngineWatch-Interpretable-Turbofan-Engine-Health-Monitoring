@@ -50,6 +50,9 @@ selected_sensors:
   - sensor_20
   - sensor_21
 
+save_scaler: true
+scaler_path: models/scaler.joblib
+
 health_index:
   n_components: 1
   normalize: true
