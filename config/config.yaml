@@ -70,3 +70,7 @@ clustering:
 risk_score:
   normalize: true
   distance_metric: euclidean
+
+validation:
+  monotonicity_abs_rho_threshold: 0.7
+  weak_risk_rul_correlation_threshold: -0.5
