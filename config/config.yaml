@@ -74,3 +74,13 @@ risk_score:
 validation:
   monotonicity_abs_rho_threshold: 0.7
   weak_risk_rul_correlation_threshold: -0.5
+
+rul:
+  max_rul_clip: 125
+  random_state: 42
+  save_path: models/
+  features:
+    - health_index
+    - HI_velocity
+    - HI_variability
+    - risk_score
