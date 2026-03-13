@@ -15,6 +15,7 @@ from app.components.hi_plot import render_hi_plot
 from app.components.dynamics_plots import render_dynamics_plots
 from app.components.risk_gauge import render_risk_gauge
 from app.components.cluster_timeline import render_cluster_timeline
+from app.components.rul_prediction import render_rul_prediction
 
 def main():
     st.title("CMAPSS Engine Health Monitor")
@@ -59,6 +60,7 @@ def main():
         render_dynamics_plots(engine_df)
     with col2:
         render_risk_gauge(engine_df)
+        render_rul_prediction(engine_df)
         
     st.markdown("---")
     # Cluster Progression Timeline
