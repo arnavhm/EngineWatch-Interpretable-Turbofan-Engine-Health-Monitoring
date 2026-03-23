@@ -1,11 +1,6 @@
 import streamlit as st
 import pandas as pd
-
-COLORS = {
-    "Healthy": "#2ecc71",
-    "Degrading": "#f39c12",
-    "Critical": "#e74c3c"
-}
+from app.theme import STATE_COLORS
 
 def render_engine_selector(df: pd.DataFrame) -> int:
     with st.sidebar:
@@ -22,19 +17,22 @@ def render_engine_selector(df: pd.DataFrame) -> int:
         st.metric("Current Cycle", current_cycle)
         st.metric("Risk Score", f"{risk_score:.2f}")
         
-        # Badge for Health State
-        badge_color = COLORS.get(health_state, "gray")
+        # Badge for Health State — larger, bolder, full-width, rounded
+        badge_color = STATE_COLORS.get(health_state, "gray")
         st.markdown(
             f"""
             <div style="
                 background-color: {badge_color};
                 color: white;
-                padding: 0.5rem 1rem;
-                border-radius: 0.5rem;
+                padding: 0.75rem 1rem;
+                border-radius: 10px;
                 text-align: center;
-                font-weight: bold;
-                font-size: 1.2rem;
+                font-weight: 800;
+                font-size: 1.25rem;
+                letter-spacing: 0.03em;
                 margin-top: 1rem;
+                width: 100%;
+                box-sizing: border-box;
             ">
                 {health_state}
             </div>

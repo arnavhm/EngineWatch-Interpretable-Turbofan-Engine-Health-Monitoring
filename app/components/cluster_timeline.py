@@ -1,15 +1,13 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-
-COLORS = {
-    "Healthy": "#2ecc71",
-    "Degrading": "#f39c12",
-    "Critical": "#e74c3c"
-}
+from app.theme import STATE_COLORS, SECTION_TITLE_CSS
 
 def render_cluster_timeline(df: pd.DataFrame, unit_id: int):
-    st.markdown(f"#### Degradation State Timeline — Engine {unit_id}")
+    st.markdown(
+        f'<p style="{SECTION_TITLE_CSS}">Degradation State Timeline — Engine {unit_id}</p>',
+        unsafe_allow_html=True,
+    )
     
     # Ensure risk_state is ordered Categorical for consistent plotting
     category_order = ["Healthy", "Degrading", "Critical"]
@@ -21,7 +19,7 @@ def render_cluster_timeline(df: pd.DataFrame, unit_id: int):
         x="cycle",
         y="risk_state",
         color="risk_state",
-        color_discrete_map=COLORS,
+        color_discrete_map=STATE_COLORS,
         category_orders={"risk_state": category_order},
         hover_data=["cycle", "risk_state", "risk_score", "health_index"]
     )

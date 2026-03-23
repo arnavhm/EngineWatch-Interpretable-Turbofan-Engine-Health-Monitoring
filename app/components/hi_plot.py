@@ -1,15 +1,13 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-
-COLORS = {
-    "Healthy": "#2ecc71",
-    "Degrading": "#f39c12",
-    "Critical": "#e74c3c"
-}
+from app.theme import STATE_COLORS, SECTION_TITLE_CSS
 
 def render_hi_plot(df: pd.DataFrame, unit_id: int):
-    st.markdown(f"#### Health Index Trajectory — Engine {unit_id}")
+    st.markdown(
+        f'<p style="{SECTION_TITLE_CSS}">Health Index Trajectory — Engine {unit_id}</p>',
+        unsafe_allow_html=True,
+    )
     
     # Calculate rolling mean
     df_plot = df.copy()
@@ -41,7 +39,7 @@ def render_hi_plot(df: pd.DataFrame, unit_id: int):
     fig.add_hline(
         y=0.5,
         line_dash="dot",
-        line_color=COLORS["Critical"],
+        line_color=STATE_COLORS["Critical"],
         annotation_text="Degradation Threshold",
         annotation_position="bottom right"
     )

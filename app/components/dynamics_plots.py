@@ -1,18 +1,16 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-
-COLORS = {
-    "Healthy": "#2ecc71",
-    "Degrading": "#f39c12",
-    "Critical": "#e74c3c"
-}
+from app.theme import STATE_COLORS, SECTION_TITLE_CSS
 
 def render_dynamics_plots(df: pd.DataFrame):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### Degradation Velocity")
+        st.markdown(
+            f'<p style="{SECTION_TITLE_CSS}">Degradation Velocity</p>',
+            unsafe_allow_html=True,
+        )
         fig_vel = go.Figure()
         
         # Add velocity line
@@ -43,9 +41,9 @@ def render_dynamics_plots(df: pd.DataFrame):
         
         fig_vel.add_trace(go.Scatter(
             x=df["cycle"],
-            y=[min(v, 0) for v in df["HI_velocity"]], # Mask positive values to 0
+            y=[min(v, 0) for v in df["HI_velocity"]],
             fill='tonexty',
-            fillcolor='rgba(231, 76, 60, 0.3)', # Red shading for negative values
+            fillcolor=f'rgba({int(STATE_COLORS["Critical"][1:3], 16)}, {int(STATE_COLORS["Critical"][3:5], 16)}, {int(STATE_COLORS["Critical"][5:7], 16)}, 0.3)',
             line=dict(width=0),
             name="Active Degradation",
             hoverinfo="skip",
@@ -60,16 +58,23 @@ def render_dynamics_plots(df: pd.DataFrame):
         st.plotly_chart(fig_vel, use_container_width=True)
         
     with col2:
-        st.markdown("#### Health Variability")
+        st.markdown(
+            f'<p style="{SECTION_TITLE_CSS}">Health Variability</p>',
+            unsafe_allow_html=True,
+        )
         fig_var = go.Figure()
         
+        # Derive RGBA from Degrading colour
+        _dg = STATE_COLORS["Degrading"]
+        _dg_rgba = f'rgba({int(_dg[1:3], 16)}, {int(_dg[3:5], 16)}, {int(_dg[5:7], 16)}, 0.4)'
+
         fig_var.add_trace(go.Scatter(
             x=df["cycle"],
             y=df["HI_variability"],
             mode="lines",
             fill="tozeroy",
-            fillcolor="rgba(243, 156, 18, 0.4)", # Orange with 40% opacity
-            line=dict(color="#f39c12", width=2),
+            fillcolor=_dg_rgba,
+            line=dict(color=STATE_COLORS["Degrading"], width=2),
             name="Variability",
             hovertemplate="Cycle: %{x}<br>Variability: %{y:.4f}<extra></extra>"
         ))
