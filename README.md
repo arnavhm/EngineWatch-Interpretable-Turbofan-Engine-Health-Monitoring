@@ -22,7 +22,7 @@ EngineWatch monitors turbofan engine degradation and predicts Remaining Useful L
 
 ## Architecture
 
-```
+```text
 Raw Telemetry (26 cols)
     ↓
 Preprocessing (flat sensor removal, StandardScaler)
@@ -62,7 +62,7 @@ Streamlit Dashboard
 
 ## Project Structure
 
-```
+```text
 data/           load.py, preprocess.py
 features/       health_index.py, velocity.py, variability.py
 model/          clustering.py, risk.py, rul.py
