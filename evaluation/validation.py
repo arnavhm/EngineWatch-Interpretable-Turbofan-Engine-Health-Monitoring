@@ -314,6 +314,86 @@ def _validate_risk_rul_correlation(df: pd.DataFrame) -> tuple[float, float]:
     return pearson_r, p_value
 
 
+def detect_anomalous_engines(
+    df: pd.DataFrame,
+    feature_cols: list = ["health_index", "HI_velocity", "HI_variability"],
+    threshold: float = 3.0,
+) -> pd.DataFrame:
+    """
+    Flag engines whose degradation trajectory deviates significantly from
+    the fleet average using Mahalanobis distance on last-cycle features.
+
+    Purpose:
+        The RUL model was trained on 100 engines. If a test engine degrades
+        in a pattern not seen during training, the model will still produce
+        a prediction but cannot be trusted. Flagging anomalous engines tells
+        the operator to treat the prediction with caution.
+
+    Mathematical definition:
+        For each engine's last-cycle feature vector x:
+            d = sqrt((x - mu)^T * Sigma^-1 * (x - mu))
+        where mu = fleet mean vector, Sigma = fleet covariance matrix.
+        Engines with d > threshold * median(d) are flagged as anomalous.
+
+    Input:
+        df           - DataFrame with all engines, must contain feature_cols
+                       and unit column
+        feature_cols - features to use for distance computation
+        threshold    - multiplier above median distance to flag as anomalous
+
+    Output:
+        DataFrame with columns:
+            unit, mahalanobis_distance, is_anomaly (bool), anomaly_reason
+
+    Assumptions:
+        - df contains last-cycle data per engine (call _get_last_cycle first)
+        - feature_cols are present and NaN-free
+        - At least 10 engines required for stable covariance estimate
+
+    Failure conditions:
+        - Singular covariance matrix -> falls back to Euclidean distance
+        - Fewer than 10 engines -> raises ValueError
+    """
+    from scipy.linalg import inv
+    from scipy.spatial.distance import mahalanobis
+
+    last_cycle = df.sort_values("cycle").groupby("unit").last().reset_index()
+
+    if len(last_cycle) < 10:
+        raise ValueError(
+            f"Need at least 10 engines for anomaly detection, got {len(last_cycle)}"
+        )
+
+    X = last_cycle[feature_cols].values
+    mu = X.mean(axis=0)
+    cov = np.cov(X.T)
+
+    try:
+        cov_inv = inv(cov)
+        distances = np.array([mahalanobis(x, mu, cov_inv) for x in X])
+    except np.linalg.LinAlgError:
+        distances = np.linalg.norm(X - mu, axis=1)
+
+    median_dist = np.median(distances)
+    is_anomaly = distances > threshold * median_dist
+
+    result = pd.DataFrame(
+        {
+            "unit": last_cycle["unit"].values,
+            "mahalanobis_distance": np.round(distances, 3),
+            "is_anomaly": is_anomaly,
+            "anomaly_reason": [
+                f"Distance {d:.2f} exceeds threshold {threshold * median_dist:.2f}"
+                if a
+                else "Within normal fleet range"
+                for d, a in zip(distances, is_anomaly)
+            ],
+        }
+    )
+
+    return result
+
+
 def run_validation(df: pd.DataFrame, config: Optional[dict] = None) -> ValidationReport:
     """
     Purpose:
