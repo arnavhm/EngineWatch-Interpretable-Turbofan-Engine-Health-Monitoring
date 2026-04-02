@@ -31,6 +31,7 @@ import warnings
 from dataclasses import dataclass, field
 from typing import Optional
 
+
 @dataclass
 class HealthIndexArtifacts:
     """
@@ -39,13 +40,98 @@ class HealthIndexArtifacts:
 
     Carrying everything in a single structured object avoids returning bare tuples and makes the pipeline state inspectable and serializable for later analysis.
     """
+
     explained_variance_ratio: float  # Fraction of variance explained by PC1
     sensor_loadings: pd.Series  # PC1 loadings for each sensor
-    invert: bool  #Whether HI was inverted after normalisation
-    hi_min : float  #Min of raw PC1 scores (for normalisation)
-    hi_max : float  #Max of raw PC1 scores (for normalisation)
-    pca: PCA  #Fitted sklearn PCA object
-    monotonicity_score: dict[str, float] = field(default_factory=dict)  # Spearman correlation per engine for monotonicity check
+    loadings: np.ndarray  # PC1 loadings, shape (n_sensors,)
+    invert: bool  # Whether HI was inverted after normalisation
+    hi_min: float  # Min of raw PC1 scores (for normalisation)
+    hi_max: float  # Max of raw PC1 scores (for normalisation)
+    pca: PCA  # Fitted sklearn PCA object
+    monotonicity_score: dict[str, float] = field(
+        default_factory=dict
+    )  # Spearman correlation per engine for monotonicity check
+
+
+def compute_sensor_contributions(
+    engine_df: pd.DataFrame,
+    hi_artifacts: "HealthIndexArtifacts",
+    sensor_cols: list,
+) -> pd.DataFrame:
+    """
+    Compute per-cycle sensor contributions to the Health Index for one engine.
+
+    Purpose:
+        The health index is a linear combination of standardised sensor values
+        weighted by PC1 loadings. Decomposing this combination shows which
+        sensors are responsible for the current health state - enabling fault
+        localisation beyond the aggregate HI value.
+
+    Mathematical definition:
+        For each cycle:
+            raw_contribution_i = scaled_sensor_i * pc1_loading_i
+        The signed contribution shows whether sensor i is pushing HI toward
+        degradation (positive) or health (negative), weighted by its loading.
+
+        Absolute contribution normalised to percentage:
+            pct_i = |raw_i| / sum(|raw_j|) * 100
+
+    Input:
+        engine_df    - DataFrame for ONE engine, must contain scaled sensor columns
+        hi_artifacts - HealthIndexArtifacts with pca, loadings, scaler
+        sensor_cols  - list of sensor column names (must match artifacts)
+
+    Output:
+        DataFrame with columns:
+            cycle, {sensor}_contribution (signed) for each sensor,
+            top_sensor (name of dominant sensor per cycle),
+            top_contribution_pct (percentage contribution of top sensor)
+
+    Assumptions:
+        - engine_df contains scaled sensor values (StandardScaler already applied)
+        - sensor_cols matches the order used during PCA fitting
+        - Single engine only - group by unit before calling
+
+    Failure conditions:
+        - Missing sensor columns -> KeyError
+        - Mismatch in sensor_cols vs loadings shape -> ValueError
+    """
+    missing = [c for c in sensor_cols if c not in engine_df.columns]
+    if missing:
+        raise KeyError(f"Sensor columns missing from engine_df: {missing}")
+
+    loadings = hi_artifacts.loadings
+
+    if len(loadings) != len(sensor_cols):
+        raise ValueError(
+            f"Loadings length {len(loadings)} does not match "
+            f"sensor_cols length {len(sensor_cols)}"
+        )
+
+    sensor_values = engine_df[sensor_cols].values
+    contributions = sensor_values * loadings
+
+    contrib_df = pd.DataFrame(
+        contributions,
+        columns=[f"{s}_contribution" for s in sensor_cols],
+        index=engine_df.index,
+    )
+    contrib_df.insert(0, "cycle", engine_df["cycle"].values)
+
+    abs_contributions = np.abs(contributions)
+    top_sensor_idx = abs_contributions.argmax(axis=1)
+    contrib_df["top_sensor"] = [sensor_cols[i] for i in top_sensor_idx]
+
+    row_totals = abs_contributions.sum(axis=1)
+    contrib_df["top_contribution_pct"] = np.round(
+        abs_contributions[np.arange(len(top_sensor_idx)), top_sensor_idx]
+        / np.where(row_totals > 0, row_totals, 1)
+        * 100,
+        1,
+    )
+
+    return contrib_df
+
 
 class PCAHealthIndex:
     """
@@ -72,11 +158,13 @@ class PCAHealthIndex:
             raise KeyError("Missing required config key: 'selected_sensors'")
 
         hi_cfg = config["health_index"]
-        self.n_components: int = hi_cfg['n_components']  # always 1 for HI
-        self.normalize: bool = hi_cfg["normalize"] # should always be True
-        self.invert: bool = hi_cfg["invert"] # default True; validated below
+        self.n_components: int = hi_cfg["n_components"]  # always 1 for HI
+        self.normalize: bool = hi_cfg["normalize"]  # should always be True
+        self.invert: bool = hi_cfg["invert"]  # default True; validated below
         self.selected_sensors: list[str] = config["selected_sensors"]
-        self.random_state: int = config.get("random_state", 42)  # for PCA reproducibility
+        self.random_state: int = config.get(
+            "random_state", 42
+        )  # for PCA reproducibility
 
         # Placeholders - populated only aftet fit()
         self._pca: Optional[PCA] = None
@@ -84,11 +172,10 @@ class PCAHealthIndex:
         self._hi_max: Optional[float] = None
         self._artifacts: Optional[HealthIndexArtifacts] = None
 
-            # ----------------------------------------------------------
-            # Private Helpers
-            # ----------------------------------------------------------
-    
-       
+        # ----------------------------------------------------------
+        # Private Helpers
+        # ----------------------------------------------------------
+
     def _extract_sensor_matrix(self, df: pd.DataFrame) -> np.ndarray:
         """
         Extract the sensor columns as a numpy matrix for PCA.
@@ -105,13 +192,13 @@ class PCAHealthIndex:
                 "Ensure preprocess.py ran successfully before calling health_index.py."
             )
         return df[self.selected_sensors].values
-    
-    def _determine_inversion(self, scores: np.ndarray, df:pd.DataFrame) -> bool:
+
+    def _determine_inversion(self, scores: np.ndarray, df: pd.DataFrame) -> bool:
         """
         Dtermine whether PC1 scores should be inverted to align with health degradation.
-        
+
         Purpose: After normalisation, HI should be HIGH at early life and LOW near failure. We check whether the mean PC1 score at the final cycle across all engines. If not, invert.
-        
+
         Input:  scores - raw PC1 scores (n_rows,)
                 df     - DataFrame with 'unit' and 'cycle'
                 columns
@@ -126,7 +213,9 @@ class PCAHealthIndex:
         start_cycles = temp.groupby("unit")["cycle"].min().reset_index()
         start_cycles.columns = ["unit", "start_cycle"]
         temp_start = temp.merge(start_cycles, on="unit")
-        mean_at_start = temp_start[temp_start["cycle"] == temp_start["start_cycle"]]["score"].mean()
+        mean_at_start = temp_start[temp_start["cycle"] == temp_start["start_cycle"]][
+            "score"
+        ].mean()
 
         # Mean score at final cycle of each engine, then average across engines
         last_cycles = temp.groupby("unit")["cycle"].max().reset_index()
@@ -138,18 +227,18 @@ class PCAHealthIndex:
         # If start score < end score: PC1 is "high = degraded", we should invert.
         should_invert = mean_at_start < mean_at_end
         return should_invert
-    
+
     def _normalise(self, scores: np.ndarray) -> np.ndarray:
         """
-     Min-max normalisation to [0, 1] using fitted parameters.
+        Min-max normalisation to [0, 1] using fitted parameters.
 
-        Purpose:  Make HI dimensionless and bounded regardless of PCA scaling.
-        Input:    raw PC1 scores (n_rows,)
-        Output:   normalised scores in [0, 1]
-        Failure:  If hi_max == hi_min (constant scores), raises ValueError.
+           Purpose:  Make HI dimensionless and bounded regardless of PCA scaling.
+           Input:    raw PC1 scores (n_rows,)
+           Output:   normalised scores in [0, 1]
+           Failure:  If hi_max == hi_min (constant scores), raises ValueError.
 
-        Mathematical definition:
-            HI_norm = (z - z_min) / (z_max - z_min)
+           Mathematical definition:
+               HI_norm = (z - z_min) / (z_max - z_min)
         """
         if self._hi_max is None or self._hi_min is None:
             raise RuntimeError("PCAHealthIndex must be fitted before normalisation.")
@@ -270,6 +359,7 @@ class PCAHealthIndex:
         self._artifacts = HealthIndexArtifacts(
             explained_variance_ratio=float(ev),
             sensor_loadings=loadings,
+            loadings=self._pca.components_[0],
             invert=self.invert,
             hi_min=self._hi_min,
             hi_max=self._hi_max,
@@ -330,6 +420,7 @@ class PCAHealthIndex:
 # ------------------------------------------------------------------
 # Module-level convenience function (mirrors preprocess.py's public API)
 # ------------------------------------------------------------------
+
 
 def build_health_index(
     train_df: pd.DataFrame,
