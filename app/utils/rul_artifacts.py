@@ -1,4 +1,4 @@
-"""Utilities for loading and rebuilding RUL model artifacts safely."""
+"""Utilities for loading pre-trained RUL model artifacts safely."""
 
 from __future__ import annotations
 
@@ -6,11 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import pandas as pd
-
-from app.utils.data_loader import load_pipeline_data
-from data.load import load_config, load_dataset
-from model.rul import build_rul_model
+from data.load import load_config
 
 
 def _project_root() -> Path:
@@ -19,7 +15,7 @@ def _project_root() -> Path:
 
 
 def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
-    """Return prioritized artifact file paths (config path first, then legacy path)."""
+    """Return artifact path from active project config."""
     root = _project_root()
 
     configured_dir = Path(config["rul"]["save_path"])
@@ -28,58 +24,39 @@ def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
     else:
         configured_path = root / configured_dir / "rul_artifacts.joblib"
 
-    # Legacy artifact location kept as fallback for older runs.
-    legacy_path = root / "notebooks" / "models" / "rul_artifacts.joblib"
-
-    candidates = [configured_path.resolve()]
-    if legacy_path.resolve() not in candidates:
-        candidates.append(legacy_path.resolve())
-    return candidates
-
-
-def _attach_test_rul(test_df: pd.DataFrame, rul_offsets: pd.Series) -> pd.DataFrame:
-    """Add cycle-level test RUL using CMAPSS offset convention."""
-    test_with_rul = test_df.copy()
-    max_cycle_by_unit = test_with_rul.groupby("unit")["cycle"].transform("max")
-    final_rul_by_unit = test_with_rul["unit"].map(rul_offsets)
-
-    if final_rul_by_unit.isna().any():
-        missing_units = (
-            test_with_rul.loc[final_rul_by_unit.isna(), "unit"]
-            .drop_duplicates()
-            .tolist()
-        )
-        raise ValueError(
-            f"Missing ground-truth RUL offsets for test units: {missing_units}"
-        )
-
-    test_with_rul["RUL"] = (
-        max_cycle_by_unit - test_with_rul["cycle"] + final_rul_by_unit
-    )
-    return test_with_rul
+    return [configured_path.resolve()]
 
 
 def load_or_rebuild_rul_artifacts() -> Any:
     """
-    Load RUL artifacts from disk, rebuilding if serialization is incompatible.
+    Load RUL artifacts from disk.
 
     Purpose:
-        Handle scikit-learn/joblib incompatibilities across Python environments
-        by retraining artifacts from the current code and dependency stack.
+        Keep dashboard runtime read-only and fail fast when artifacts
+        are missing or incompatible with the current environment.
     """
     config = load_config()
+    load_errors: list[str] = []
 
     for path in _candidate_artifact_paths(config):
         if not path.exists():
             continue
         try:
             return joblib.load(path)
-        except Exception:
-            # Rebuild if an artifact cannot be deserialized in this environment.
+        except Exception as error:
+            load_errors.append(f"{path}: {error}")
             continue
 
-    train_rs, test_rs = load_pipeline_data()
-    _, _, test_rul_offsets = load_dataset(config)
-    test_with_rul = _attach_test_rul(test_rs, test_rul_offsets)
-    _, artifacts = build_rul_model(train_rs, test_with_rul, config)
-    return artifacts
+    candidate_paths = [str(path) for path in _candidate_artifact_paths(config)]
+    error_details = (
+        "\n".join(load_errors)
+        if load_errors
+        else "No candidate artifact file could be loaded."
+    )
+    raise RuntimeError(
+        "Unable to load RUL artifacts for dashboard inference.\n"
+        "Dashboard runtime does not retrain models.\n"
+        "Run offline training first: python scripts/train_rul_artifacts.py\n"
+        f"Searched paths: {candidate_paths}\n"
+        f"Load errors: {error_details}"
+    )

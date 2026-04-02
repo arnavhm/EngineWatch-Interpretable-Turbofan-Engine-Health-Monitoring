@@ -100,8 +100,24 @@ Run locally:
 
 ```bash
 pip install -r requirements.txt
+```
+
+### ▶️ Running the Project
+
+Step 1 — Train models (required)
+
+```bash
+python train_rul_artifacts.py
+```
+
+Step 2 — Launch dashboard
+
+```bash
 streamlit run app/dashboard.py
 ```
+
+Note: Running `python dashboard.py` is only for sanity checks.
+The dashboard must be launched using Streamlit.
 
 ---
 

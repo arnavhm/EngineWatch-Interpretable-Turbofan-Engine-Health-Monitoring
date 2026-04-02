@@ -192,7 +192,9 @@ def save_processed(df: pd.DataFrame, output_path: str) -> None:
 
 
 def preprocess_train(
-    df: pd.DataFrame, config: dict
+    df: pd.DataFrame,
+    config: dict,
+    persist_outputs: bool = True,
 ) -> Tuple[pd.DataFrame, StandardScaler, list[str]]:
     """
     Preprocess training data end-to-end.
@@ -220,10 +222,11 @@ def preprocess_train(
 
     processed_path = Path(config["dataset"]["processed_path"])
     dataset_name = config["dataset"]["name"]
-    output_file = processed_path / f"train_{dataset_name}_processed.parquet"
-    save_processed(train_processed, str(output_file))
+    if persist_outputs:
+        output_file = processed_path / f"train_{dataset_name}_processed.parquet"
+        save_processed(train_processed, str(output_file))
 
-    if config.get("save_scaler", False):
+    if persist_outputs and config.get("save_scaler", False):
         scaler_path = Path(config.get("scaler_path", "models/scaler.joblib"))
         scaler_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(scaler, scaler_path)
@@ -232,7 +235,10 @@ def preprocess_train(
 
 
 def preprocess_test(
-    df: pd.DataFrame, config: dict, scaler: StandardScaler
+    df: pd.DataFrame,
+    config: dict,
+    scaler: StandardScaler,
+    persist_outputs: bool = True,
 ) -> pd.DataFrame:
     """
     Preprocess test data using a pre-fitted training scaler.
@@ -257,7 +263,8 @@ def preprocess_test(
 
     processed_path = Path(config["dataset"]["processed_path"])
     dataset_name = config["dataset"]["name"]
-    output_file = processed_path / f"test_{dataset_name}_processed.parquet"
-    save_processed(test_processed, str(output_file))
+    if persist_outputs:
+        output_file = processed_path / f"test_{dataset_name}_processed.parquet"
+        save_processed(test_processed, str(output_file))
 
     return test_processed

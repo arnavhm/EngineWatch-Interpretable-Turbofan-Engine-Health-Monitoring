@@ -80,48 +80,16 @@ rul:
   piecewise_onset_threshold: 0.05
   random_state: 42
   save_path: models/
+  models:
+    random_forest_n_estimators: 100
+    gradient_boosting_n_estimators: 100
   features:
     - health_index
     - HI_velocity
     - HI_variability
     - risk_score
 
-ecommerce_wallboard:
-  data_path: data/raw/ecommerce.csv
-  monthly_period: M
-  sparkline_months: 12
-  discount_is_fraction: true
-  metrics:
-    sales_decimals: 0
-    percentage_decimals: 2
-    currency_symbol: "$"
-  columns:
-    order_date: Order Date
-    sales: Sales
-    profit: Profit
-    discount: Discount
-    order_id: Order ID
-  column_candidates:
-    order_date:
-      - Order Date
-      - InvoiceDate
-      - order_date
-      - invoice_date
-      - date
-    sales:
-      - Sales
-      - Revenue
-      - sales
-      - revenue
-    profit:
-      - Profit
-      - profit
-    discount:
-      - Discount
-      - discount
-    order_id:
-      - Order ID
-      - InvoiceNo
-      - Invoice
-      - order_id
-      - invoice_no
+dashboard:
+  rul_bands:
+    healthy_min: 80
+    degrading_min: 30

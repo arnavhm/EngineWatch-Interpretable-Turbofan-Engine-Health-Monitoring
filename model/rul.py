@@ -60,6 +60,7 @@ RUL_FEATURES = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
 def _compute_piecewise_rul(
     train_df: pd.DataFrame,
     rul_clip: int,
+    onset_threshold: float,
 ) -> np.ndarray:
     """
     Compute piecewise linear RUL targets for training.
@@ -73,12 +74,12 @@ def _compute_piecewise_rul(
 
         Degradation onset is identified per engine as the first cycle where
         the health index drops below its initial value by more than a threshold
-        (0.05 normalized units). This avoids clipping on an arbitrary cycle
+        (configurable normalized units). This avoids clipping on an arbitrary cycle
         number and grounds the target in the actual health signal.
 
     Mathematical definition:
         For each engine:
-            onset_cycle = first cycle where HI < HI_initial - 0.05
+            onset_cycle = first cycle where HI < HI_initial - onset_threshold
             RUL(cycle) = min(max_rul_clip, max_cycle - cycle)
                          but capped at max_rul_clip for all cycles before onset
 
@@ -112,10 +113,10 @@ def _compute_piecewise_rul(
         group = group.sort_values("cycle")
         idx = group.index
 
-        # Identify degradation onset: first cycle where HI drops 0.05 below
+        # Identify degradation onset: first cycle where HI drops onset_threshold below
         # the engine's initial health index value
         hi_initial = group["health_index"].iloc[0]
-        onset_mask = group["health_index"] < (hi_initial - 0.05)
+        onset_mask = group["health_index"] < (hi_initial - onset_threshold)
 
         if onset_mask.any():
             onset_rows = group[onset_mask]
@@ -162,11 +163,12 @@ class RULArtifacts:
     evaluation_metrics: dict
     feature_importance: dict
     confidence_intervals: dict
+    prediction_balance: dict
     rul_clip: int
     model_used: str
 
 
-def _validate_features(df: pd.DataFrame, require_rul: bool = False):
+def _validate_features(df: pd.DataFrame, require_rul: bool = False) -> None:
     """
     Validate that required columns are present and NaN-free in the dataframe.
 
@@ -236,14 +238,21 @@ def _train_models(
     Output: dict mapping model name -> fitted model object
     """
     random_state = config["rul"]["random_state"]
+    models_cfg = config["rul"].get("models", {})
+    random_forest_n_estimators = models_cfg.get("random_forest_n_estimators", 100)
+    gradient_boosting_n_estimators = models_cfg.get(
+        "gradient_boosting_n_estimators", 100
+    )
 
     models = {
         "linear_regression": LinearRegression(),
         "random_forest": RandomForestRegressor(
-            n_estimators=100, random_state=random_state
+            n_estimators=random_forest_n_estimators,
+            random_state=random_state,
         ),
         "gradient_boosting": GradientBoostingRegressor(
-            n_estimators=100, random_state=random_state
+            n_estimators=gradient_boosting_n_estimators,
+            random_state=random_state,
         ),
     }
 
@@ -436,11 +445,12 @@ def build_rul_model(
     _validate_features(test_df, require_rul=True)
 
     rul_clip = config["rul"]["max_rul_clip"]
+    onset_threshold = config["rul"]["piecewise_onset_threshold"]
     save_path = config["rul"]["save_path"]
 
     # Prepare training data - clip RUL targets
     X_train = train_df[RUL_FEATURES].values
-    y_train = _compute_piecewise_rul(train_df, rul_clip)
+    y_train = _compute_piecewise_rul(train_df, rul_clip, onset_threshold)
 
     # Prepare test data - last cycle per engine only (official evaluation protocol)
     test_last_cycle = _get_last_cycle_per_engine(test_df)
@@ -463,13 +473,19 @@ def build_rul_model(
 
     # Build predictions DataFrame using best model
     best_preds = predictions_per_model[best_model_name]
+    best_errors = best_preds - y_test
+    prediction_balance = {
+        "late": int(np.sum(best_errors > 0)),
+        "early": int(np.sum(best_errors < 0)),
+        "on_time": int(np.sum(best_errors == 0)),
+    }
     rf_ci = confidence_intervals.get("random_forest")
     test_predictions_df = pd.DataFrame(
         {
             "unit": test_last_cycle["unit"].values,
             "true_RUL": y_test,
             "predicted_RUL": np.round(best_preds).astype(int),
-            "error": np.round(best_preds - y_test, 2),
+            "error": np.round(best_errors, 2),
             "model_used": best_model_name,
             "ci_lower": np.round(rf_ci["lower"]).astype(int) if rf_ci else None,
             "ci_upper": np.round(rf_ci["upper"]).astype(int) if rf_ci else None,
@@ -486,6 +502,7 @@ def build_rul_model(
         evaluation_metrics=evaluation_metrics,
         feature_importance=feature_importance,
         confidence_intervals=confidence_intervals,
+        prediction_balance=prediction_balance,
         rul_clip=rul_clip,
         model_used=best_model_name,
     )

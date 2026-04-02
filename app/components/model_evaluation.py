@@ -1,14 +1,13 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+from typing import Any
 from app.theme import STATE_COLORS, SECTION_TITLE_CSS
 from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 PLOT_PATH = PROJECT_ROOT / "reports" / "rul_evaluation_plots.png"
-
-BEST_MODEL_KEY = "gradient_boosting"
 
 MODEL_DISPLAY_NAMES = {
     "linear_regression": "Linear Regression",
@@ -18,12 +17,12 @@ MODEL_DISPLAY_NAMES = {
 
 
 @st.cache_resource
-def _load_rul_artifacts():
-    """Load RUL artifacts and rebuild them automatically if incompatible."""
+def _load_rul_artifacts() -> Any:
+    """Load pre-trained RUL artifacts for dashboard display."""
     return load_or_rebuild_rul_artifacts()
 
 
-def render_model_evaluation():
+def render_model_evaluation() -> None:
     """Render the Model Evaluation panel at the bottom of the dashboard."""
     st.markdown(
         '<p style="font-size: 1.35rem; font-weight: 700; margin-bottom: 0.5rem;">📊 Model Evaluation</p>',
@@ -32,6 +31,7 @@ def render_model_evaluation():
 
     artifacts = _load_rul_artifacts()
     metrics = artifacts.evaluation_metrics
+    best_model_key = artifacts.best_model_name
 
     # ── Section 1: Model Comparison Table ──────────────────────────────
     st.markdown(
@@ -40,11 +40,9 @@ def render_model_evaluation():
     )
 
     rows = []
-    best_model_display = None
+    best_model_display = MODEL_DISPLAY_NAMES.get(best_model_key, best_model_key)
     for key, vals in metrics.items():
         display_name = MODEL_DISPLAY_NAMES.get(key, key)
-        if key == BEST_MODEL_KEY:
-            best_model_display = display_name
         rows.append(
             {
                 "Model": display_name,
@@ -84,7 +82,7 @@ def render_model_evaluation():
     if PLOT_PATH.exists():
         st.image(
             str(PLOT_PATH),
-            use_container_width=True,
+            use_column_width=True,
             caption=(
                 "Left: Predicted vs True RUL — "
                 "Right: Prediction Error vs True RUL "
@@ -92,7 +90,7 @@ def render_model_evaluation():
             ),
         )
     else:
-        st.warning(f"Evaluation plot not found at `{PLOT_PATH}`.")
+        st.warning(f"Evaluation plot not found at {PLOT_PATH}.")
 
     # ── Section 3: Key Facts ───────────────────────────────────────────
     st.markdown(
@@ -100,7 +98,14 @@ def render_model_evaluation():
         unsafe_allow_html=True,
     )
 
-    best_metrics = metrics[BEST_MODEL_KEY]
+    best_metrics = metrics[best_model_key]
+    prediction_balance = getattr(artifacts, "prediction_balance", None) or {}
+    late_count = prediction_balance.get("late")
+    early_count = prediction_balance.get("early")
+    if late_count is not None and early_count is not None:
+        prediction_balance_text = f"{late_count} late / {early_count} early"
+    else:
+        prediction_balance_text = "N/A"
 
     # Styled metric cards with border and background
     _card_css = (
@@ -116,7 +121,7 @@ def render_model_evaluation():
         st.markdown(
             f'<div style="{_card_css}">'
             f'<div style="font-size: 0.78rem; color: #888; margin-bottom: 0.3rem;">Best Model</div>'
-            f'<div style="font-size: 1.05rem; font-weight: 700;">GradientBoosting</div>'
+            f'<div style="font-size: 1.05rem; font-weight: 700;">{best_model_display}</div>'
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -132,7 +137,7 @@ def render_model_evaluation():
         st.markdown(
             f'<div style="{_card_css}">'
             f'<div style="font-size: 0.78rem; color: #888; margin-bottom: 0.3rem;">Prediction Balance</div>'
-            f'<div style="font-size: 1.05rem; font-weight: 700;">53 late / 47 early</div>'
+            f'<div style="font-size: 1.05rem; font-weight: 700;">{prediction_balance_text}</div>'
             f"</div>",
             unsafe_allow_html=True,
         )

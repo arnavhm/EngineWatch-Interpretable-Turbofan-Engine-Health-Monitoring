@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import re
+from typing import Any
+
+from data.load import load_config
 from app.theme import STATE_COLORS, SECTION_TITLE_CSS
 from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
@@ -9,12 +10,22 @@ FEATURE_COLUMNS = ["health_index", "HI_velocity", "HI_variability", "risk_score"
 
 
 @st.cache_resource
-def _load_rul_artifacts():
-    """Load RUL artifacts and rebuild them automatically if incompatible."""
+def _load_rul_artifacts() -> Any:
+    """Load pre-trained RUL artifacts for inference."""
     return load_or_rebuild_rul_artifacts()
 
 
-def render_rul_prediction(df: pd.DataFrame):
+@st.cache_data
+def _load_rul_bands() -> tuple[float, float]:
+    """Load dashboard RUL band thresholds from config."""
+    config = load_config()
+    bands = config.get("dashboard", {}).get("rul_bands", {})
+    healthy_min = float(bands.get("healthy_min", 80))
+    degrading_min = float(bands.get("degrading_min", 30))
+    return healthy_min, degrading_min
+
+
+def render_rul_prediction(df: pd.DataFrame) -> None:
     """Display predicted Remaining Useful Life for the selected engine."""
     st.markdown(
         f'<p style="{SECTION_TITLE_CSS}">Predicted Remaining Useful Life</p>',
@@ -24,6 +35,7 @@ def render_rul_prediction(df: pd.DataFrame):
     artifacts = _load_rul_artifacts()
     model = artifacts.best_model
     metrics = artifacts.evaluation_metrics
+    model_key = artifacts.best_model_name
 
     # Last cycle row for this engine
     last_row = df.iloc[[-1]]
@@ -32,19 +44,17 @@ def render_rul_prediction(df: pd.DataFrame):
     predicted_rul = float(model.predict(features)[0])
     predicted_rul = max(predicted_rul, 0)  # floor at 0
 
-    # Derive a readable model name and look up its RMSE in the nested metrics dict.
+    # Derive a readable model name and look up its RMSE in metrics dict.
     model_name = type(model).__name__
 
-    # Build lookup key: "GradientBoostingRegressor" → "gradient_boosting"
-    _parts = re.sub(r"(Regressor|Classifier)$", "", model_name)
-    _key = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", _parts).lower()
-    model_metrics = metrics.get(_key, {})
+    model_metrics = metrics.get(model_key, {})
     rmse = model_metrics.get("rmse") if isinstance(model_metrics, dict) else None
 
     # --- Determine colour based on predicted RUL ---
-    if predicted_rul > 80:
+    healthy_min, degrading_min = _load_rul_bands()
+    if predicted_rul > healthy_min:
         rul_color = STATE_COLORS["Healthy"]
-    elif predicted_rul > 30:
+    elif predicted_rul > degrading_min:
         rul_color = STATE_COLORS["Degrading"]
     else:
         rul_color = STATE_COLORS["Critical"]

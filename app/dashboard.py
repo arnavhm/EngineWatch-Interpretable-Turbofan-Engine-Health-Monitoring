@@ -1,9 +1,9 @@
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
-import pandas as pd
 
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="CMAPSS Engine Health Monitor", layout="wide")
@@ -18,9 +18,11 @@ from app.components.cluster_timeline import render_cluster_timeline
 from app.components.rul_prediction import render_rul_prediction
 from app.components.model_evaluation import render_model_evaluation
 
-def main():
+
+def main() -> None:
     # ── Global CSS injection ───────────────────────────────────────────
-    st.markdown("""
+    st.markdown(
+        """
     <style>
     /* Section headers */
     h2, h3 { 
@@ -61,32 +63,34 @@ def main():
         font-family: 'Inter', sans-serif !important;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.title("CMAPSS Engine Health Monitor")
-    
+
     # Run pipeline and cache data
     with st.spinner("Loading and processing engine data..."):
         train_rs, test_rs = load_pipeline_data()
 
     df = test_rs.copy()
-    
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # FLEET RISK OVERVIEW
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     st.divider()
     render_fleet_overview(df)
-    
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # ENGINE LEVEL DETAILS
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
+
     selected_engine_id = render_engine_selector(df)
     engine_df = df[df["unit"] == selected_engine_id].copy()
-    
+
     st.divider()
     render_hi_plot(engine_df, selected_engine_id)
-    
+
     st.divider()
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -94,15 +98,16 @@ def main():
     with col2:
         render_risk_gauge(engine_df)
         render_rul_prediction(engine_df)
-        
+
     st.divider()
     render_cluster_timeline(engine_df, selected_engine_id)
-    
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # MODEL EVALUATION
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     st.divider()
     render_model_evaluation()
+
 
 if __name__ == "__main__":
     main()
