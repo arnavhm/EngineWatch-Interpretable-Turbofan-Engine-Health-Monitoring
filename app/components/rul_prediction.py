@@ -1,20 +1,17 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
 import re
-from pathlib import Path
 from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
 FEATURE_COLUMNS = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
-
-ARTIFACT_PATH = Path(__file__).resolve().parent.parent.parent / "notebooks" / "models" / "rul_artifacts.joblib"
 
 
 @st.cache_resource
 def _load_rul_artifacts():
-    """Load the pre-trained RUL model artifacts (cached across reruns)."""
-    return joblib.load(ARTIFACT_PATH)
+    """Load RUL artifacts and rebuild them automatically if incompatible."""
+    return load_or_rebuild_rul_artifacts()
 
 
 def render_rul_prediction(df: pd.DataFrame):

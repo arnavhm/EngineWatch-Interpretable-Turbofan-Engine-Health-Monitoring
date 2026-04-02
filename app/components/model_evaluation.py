@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
-import joblib
 from pathlib import Path
 from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-ARTIFACT_PATH = PROJECT_ROOT / "notebooks" / "models" / "rul_artifacts.joblib"
 PLOT_PATH = PROJECT_ROOT / "reports" / "rul_evaluation_plots.png"
 
 BEST_MODEL_KEY = "gradient_boosting"
@@ -20,8 +19,8 @@ MODEL_DISPLAY_NAMES = {
 
 @st.cache_resource
 def _load_rul_artifacts():
-    """Load pre-trained RUL model artifacts (cached across reruns)."""
-    return joblib.load(ARTIFACT_PATH)
+    """Load RUL artifacts and rebuild them automatically if incompatible."""
+    return load_or_rebuild_rul_artifacts()
 
 
 def render_model_evaluation():
@@ -46,23 +45,26 @@ def render_model_evaluation():
         display_name = MODEL_DISPLAY_NAMES.get(key, key)
         if key == BEST_MODEL_KEY:
             best_model_display = display_name
-        rows.append({
-            "Model": display_name,
-            "RMSE": round(vals["rmse"], 2),
-            "NASA Score": round(vals["nasa_score"], 2),
-        })
+        rows.append(
+            {
+                "Model": display_name,
+                "RMSE": round(vals["rmse"], 2),
+                "NASA Score": round(vals["nasa_score"], 2),
+            }
+        )
 
     table_df = pd.DataFrame(rows)
 
     def _highlight_rows(row):
         if row["Model"] == best_model_display:
-            return [f"background-color: {STATE_COLORS['Healthy']}33; font-weight: 700"] * len(row)
+            return [
+                f"background-color: {STATE_COLORS['Healthy']}33; font-weight: 700"
+            ] * len(row)
         # Non-winning rows get a subtle darker background for contrast
         return ["background-color: rgba(120,120,120,0.08)"] * len(row)
 
     styled = (
-        table_df
-        .style.apply(_highlight_rows, axis=1)
+        table_df.style.apply(_highlight_rows, axis=1)
         .format({"RMSE": "{:.2f}", "NASA Score": "{:.2f}"})
         .hide(axis="index")
     )
@@ -82,7 +84,7 @@ def render_model_evaluation():
     if PLOT_PATH.exists():
         st.image(
             str(PLOT_PATH),
-            use_column_width=True,
+            use_container_width=True,
             caption=(
                 "Left: Predicted vs True RUL — "
                 "Right: Prediction Error vs True RUL "
@@ -115,7 +117,7 @@ def render_model_evaluation():
             f'<div style="{_card_css}">'
             f'<div style="font-size: 0.78rem; color: #888; margin-bottom: 0.3rem;">Best Model</div>'
             f'<div style="font-size: 1.05rem; font-weight: 700;">GradientBoosting</div>'
-            f'</div>',
+            f"</div>",
             unsafe_allow_html=True,
         )
     with c2:
@@ -123,7 +125,7 @@ def render_model_evaluation():
             f'<div style="{_card_css}">'
             f'<div style="font-size: 0.78rem; color: #888; margin-bottom: 0.3rem;">RMSE</div>'
             f'<div style="font-size: 1.05rem; font-weight: 700;">{best_metrics["rmse"]:.2f} cycles</div>'
-            f'</div>',
+            f"</div>",
             unsafe_allow_html=True,
         )
     with c3:
@@ -131,6 +133,6 @@ def render_model_evaluation():
             f'<div style="{_card_css}">'
             f'<div style="font-size: 0.78rem; color: #888; margin-bottom: 0.3rem;">Prediction Balance</div>'
             f'<div style="font-size: 1.05rem; font-weight: 700;">53 late / 47 early</div>'
-            f'</div>',
+            f"</div>",
             unsafe_allow_html=True,
         )
