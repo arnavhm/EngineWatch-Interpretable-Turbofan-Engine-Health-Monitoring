@@ -48,8 +48,7 @@ import numpy as np
 import pandas as pd
 import joblib
 from pathlib import Path
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import mean_squared_error
@@ -151,6 +150,7 @@ class RULArtifacts:
         feature_columns - list of input feature names
         evaluation_metrics - dict: model_name -> {"rmse": float, "nasa_score": float}
         feature_importance - dict: model_name -> pd.Series (RF and GB only)
+        confidence_intervals - dict: model_name -> interval stats or None
         rul_clip - max RUL value used for clipping targets during training
         model_used - same as best_model_name (explicit field for Dashboard use)
     """
@@ -161,6 +161,7 @@ class RULArtifacts:
     feature_columns: list
     evaluation_metrics: dict
     feature_importance: dict
+    confidence_intervals: dict
     rul_clip: int
     model_used: str
 
@@ -314,6 +315,67 @@ def _extract_feature_importance(models: dict) -> dict:
     return importance
 
 
+def _compute_confidence_intervals(
+    models: dict,
+    X_test: np.ndarray,
+    confidence: float = 1.0,
+) -> dict:
+    """
+    Compute prediction confidence intervals using Random Forest tree variance.
+
+    Purpose:
+        A single RUL prediction carries no uncertainty information.
+        Random Forest trains n_estimators individual trees, each producing
+        a slightly different prediction. The standard deviation across trees
+        quantifies how much the model disagrees with itself - a direct
+        measure of prediction uncertainty.
+
+        Wide interval = model is uncertain, inspect sooner.
+        Narrow interval = model is confident in its prediction.
+
+    Mathematical definition:
+        For Random Forest with n trees producing predictions p_1...p_n:
+            mean     = (1/n) * sum(p_i)
+            std      = sqrt((1/n) * sum((p_i - mean)^2))
+            interval = mean +/- (confidence * std)
+
+    Input:
+        models     - dict of fitted models
+        X_test     - test feature matrix (n_engines, 4)
+        confidence - multiplier for interval width (default 1.0 = +/- 1 std)
+
+    Output:
+        dict mapping model_name -> {"lower": array, "upper": array, "std": array}
+        Only populated for models with tree-level predictions (Random Forest).
+        Other models return None.
+
+    Assumptions:
+        - Random Forest is present in models dict
+        - n_estimators >= 10 for meaningful variance estimate
+    """
+    intervals = {}
+
+    for name, model in models.items():
+        if isinstance(model, RandomForestRegressor):
+            # Collect predictions from each individual tree
+            tree_preds = np.array(
+                [tree.predict(X_test) for tree in model.estimators_]
+            )  # shape: (n_estimators, n_engines)
+
+            mean_pred = tree_preds.mean(axis=0)
+            std_pred = tree_preds.std(axis=0)
+
+            intervals[name] = {
+                "lower": np.clip(mean_pred - confidence * std_pred, 0, None),
+                "upper": mean_pred + confidence * std_pred,
+                "std": std_pred,
+            }
+        else:
+            intervals[name] = None
+
+    return intervals
+
+
 def _save_artifacts(artifacts: RULArtifacts, save_path: str) -> None:
     """
 
@@ -396,8 +458,12 @@ def build_rul_model(
     # Extract feature importance for tree-based models
     feature_importance = _extract_feature_importance(models)
 
+    # Compute Random Forest confidence intervals for display in the dashboard
+    confidence_intervals = _compute_confidence_intervals(models, X_test)
+
     # Build predictions DataFrame using best model
     best_preds = predictions_per_model[best_model_name]
+    rf_ci = confidence_intervals.get("random_forest")
     test_predictions_df = pd.DataFrame(
         {
             "unit": test_last_cycle["unit"].values,
@@ -405,6 +471,9 @@ def build_rul_model(
             "predicted_RUL": np.round(best_preds).astype(int),
             "error": np.round(best_preds - y_test, 2),
             "model_used": best_model_name,
+            "ci_lower": np.round(rf_ci["lower"]).astype(int) if rf_ci else None,
+            "ci_upper": np.round(rf_ci["upper"]).astype(int) if rf_ci else None,
+            "ci_std": np.round(rf_ci["std"], 1) if rf_ci else None,
         }
     )
 
@@ -416,6 +485,7 @@ def build_rul_model(
         feature_columns=RUL_FEATURES,
         evaluation_metrics=evaluation_metrics,
         feature_importance=feature_importance,
+        confidence_intervals=confidence_intervals,
         rul_clip=rul_clip,
         model_used=best_model_name,
     )
