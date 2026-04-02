@@ -45,18 +45,18 @@ Streamlit Dashboard
 
 ## Key Results
 
-| Metric | Value |
-|---|---|
-| PC1 explained variance | 64.3% |
-| HI early life → late life | 0.75 → 0.18 |
-| Silhouette score | 0.40 |
-| Spearman ρ (HI monotonicity) | −0.925 |
-| Risk–RUL Pearson r | −0.768 |
-| Best model | Gradient Boosting |
-| RMSE | 18.55 cycles |
-| NASA score | 694.4 |
-| Late predictions | 53 / 100 engines |
-| Early predictions | 47 / 100 engines |
+| Metric                       | Value             |
+| ---------------------------- | ----------------- |
+| PC1 explained variance       | 64.3%             |
+| HI early life → late life    | 0.75 → 0.18       |
+| Silhouette score             | 0.40              |
+| Spearman ρ (HI monotonicity) | −0.925            |
+| Risk–RUL Pearson r           | −0.768            |
+| Best model                   | Gradient Boosting |
+| RMSE                         | 18.55 cycles      |
+| NASA score                   | 694.4             |
+| Late predictions             | 53 / 100 engines  |
+| Early predictions            | 47 / 100 engines  |
 
 ---
 
@@ -89,6 +89,7 @@ This is a deliberate architectural decision, not a limitation:
 ## Dashboard
 
 The Streamlit dashboard provides:
+
 - Fleet risk overview (bar chart, top 5 priority list, degradation heatmap)
 - Per-engine health trajectory, velocity, variability, and risk gauge
 - Predicted RUL with confidence interval
@@ -96,6 +97,7 @@ The Streamlit dashboard provides:
 - Model evaluation panel (all three models compared)
 
 Run locally:
+
 ```bash
 pip install -r requirements.txt
 streamlit run app/dashboard.py
@@ -107,7 +109,7 @@ streamlit run app/dashboard.py
 
 NASA CMAPSS FD001 — 100 training engines, 100 test engines, single operating condition, HPC degradation fault mode.
 
-Reference: Saxena et al., *Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation*, PHM 2008.
+Reference: Saxena et al., _Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation_, PHM 2008.
 
 ---
 
