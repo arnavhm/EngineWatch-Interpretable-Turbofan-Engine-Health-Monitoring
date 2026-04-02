@@ -58,6 +58,87 @@ from sklearn.metrics import mean_squared_error
 RUL_FEATURES = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
 
 
+def _compute_piecewise_rul(
+    train_df: pd.DataFrame,
+    rul_clip: int,
+) -> np.ndarray:
+    """
+    Compute piecewise linear RUL targets for training.
+
+    Purpose:
+        The flat clip at max_rul_clip treats all early-life cycles as equally
+        uninformative by assigning them the same target value. The piecewise
+        approach is more physically honest:
+        - Before degradation onset: RUL = max_rul_clip (flat, no information)
+        - After degradation onset: RUL decreases linearly to 0 at failure
+
+        Degradation onset is identified per engine as the first cycle where
+        the health index drops below its initial value by more than a threshold
+        (0.05 normalized units). This avoids clipping on an arbitrary cycle
+        number and grounds the target in the actual health signal.
+
+    Mathematical definition:
+        For each engine:
+            onset_cycle = first cycle where HI < HI_initial - 0.05
+            RUL(cycle) = min(max_rul_clip, max_cycle - cycle)
+                         but capped at max_rul_clip for all cycles before onset
+
+    Input:
+        train_df — full training DataFrame with RUL and health_index columns
+        rul_clip — maximum RUL value (from config)
+
+    Output:
+        numpy array of piecewise RUL targets, shape (n_train_rows,)
+
+    Assumptions:
+        - health_index column is present (requires pipeline to have run to Phase 3)
+        - RUL column is present (computed by preprocess.py)
+        - Engines are identified by unit column
+
+    Failure conditions:
+        - Missing health_index column -> KeyError
+        - Missing RUL column -> KeyError
+    """
+    if "health_index" not in train_df.columns:
+        raise KeyError(
+            "health_index column required for piecewise RUL computation. "
+            "Ensure Phase 3 (health index) has run before calling build_rul_model()."
+        )
+    if "RUL" not in train_df.columns:
+        raise KeyError("RUL column missing from train_df.")
+
+    piecewise_targets = np.zeros(len(train_df))
+
+    for unit, group in train_df.groupby("unit"):
+        group = group.sort_values("cycle")
+        idx = group.index
+
+        # Identify degradation onset: first cycle where HI drops 0.05 below
+        # the engine's initial health index value
+        hi_initial = group["health_index"].iloc[0]
+        onset_mask = group["health_index"] < (hi_initial - 0.05)
+
+        if onset_mask.any():
+            onset_rows = group[onset_mask]
+            onset_cycle = onset_rows["cycle"].iloc[0]
+        else:
+            # No detectable onset — treat entire trajectory as pre-onset
+            onset_cycle = group["cycle"].max() + 1
+
+        raw_rul = group["RUL"].to_numpy(dtype=float)
+
+        # Apply piecewise: cap at rul_clip before onset, linear after
+        clipped = np.minimum(raw_rul, float(rul_clip))
+
+        # Before onset: force to rul_clip (flat region)
+        before_onset = group["cycle"].values < onset_cycle
+        clipped[before_onset] = rul_clip
+
+        piecewise_targets[idx] = clipped
+
+    return piecewise_targets
+
+
 @dataclass
 class RULArtifacts:
     """
@@ -297,7 +378,7 @@ def build_rul_model(
 
     # Prepare training data - clip RUL targets
     X_train = train_df[RUL_FEATURES].values
-    y_train = np.clip(train_df["RUL"].values, 0, rul_clip)
+    y_train = _compute_piecewise_rul(train_df, rul_clip)
 
     # Prepare test data - last cycle per engine only (official evaluation protocol)
     test_last_cycle = _get_last_cycle_per_engine(test_df)
