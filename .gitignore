@@ -8,4 +8,4 @@ __pycache__/
 *.joblib
 !models/
 !models/*.joblib
-.env
+.envmodels/

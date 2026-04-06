@@ -239,7 +239,7 @@ def _train_models(
     """
     random_state = config["rul"]["random_state"]
     models_cfg = config["rul"].get("models", {})
-    random_forest_n_estimators = models_cfg.get("random_forest_n_estimators", 100)
+    random_forest_n_estimators = models_cfg.get("random_forest_n_estimators", 50)
     gradient_boosting_n_estimators = models_cfg.get(
         "gradient_boosting_n_estimators", 100
     )
