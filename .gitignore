@@ -6,5 +6,6 @@ __pycache__/
 .DS_Store
 *.pkl
 *.joblib
+!models/
+!models/*.joblib
 .env
-models/

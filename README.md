@@ -102,6 +102,12 @@ Run locally:
 pip install -r requirements.txt
 ```
 
+Before training or launching the dashboard, activate the project virtual environment so artifacts are built and loaded with the same Python/scikit-learn stack.
+
+```bash
+source .venvs/project-2/bin/activate
+```
+
 ### ▶️ Running the Project
 
 Step 1 — Train models (required)
@@ -118,6 +124,28 @@ streamlit run app/dashboard.py
 
 Note: Running `python dashboard.py` is only for sanity checks.
 The dashboard must be launched using Streamlit.
+
+---
+
+## Environment & Model Artifacts
+
+Model artifacts are version-sensitive. Train and run the dashboard inside the same project virtual environment so the joblib files are created and loaded with the same Python and scikit-learn stack.
+
+Use the project environment at:
+
+```bash
+source .venvs/project-2/bin/activate
+```
+
+Recommended run sequence:
+
+```bash
+pip install -r requirements.txt
+python train_rul_artifacts.py
+streamlit run app/dashboard.py
+```
+
+Do not mix interpreters between training and dashboard execution.
 
 ---
 
