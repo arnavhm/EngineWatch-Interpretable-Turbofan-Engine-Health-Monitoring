@@ -15,7 +15,7 @@ def _project_root() -> Path:
 
 
 def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
-    """Return artifact path from active project config."""
+    """Return artifact paths from config first, then known legacy locations."""
     root = _project_root()
 
     configured_dir = Path(config["rul"]["save_path"])
@@ -24,7 +24,20 @@ def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
     else:
         configured_path = root / configured_dir / "rul_artifacts.joblib"
 
-    return [configured_path.resolve()]
+    # Legacy notebooks location from earlier project iterations.
+    legacy_notebooks_path = root / "notebooks" / "models" / "rul_artifacts.joblib"
+
+    candidates = [configured_path.resolve(), legacy_notebooks_path.resolve()]
+
+    # De-duplicate while preserving configured path priority.
+    unique_candidates: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate not in seen:
+            unique_candidates.append(candidate)
+            seen.add(candidate)
+
+    return unique_candidates
 
 
 def load_or_rebuild_rul_artifacts() -> Any:
