@@ -26,6 +26,7 @@ Failure conditions:
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import MinMaxScaler
 from scipy.stats import spearmanr
 import warnings
 from dataclasses import dataclass, field
@@ -161,7 +162,18 @@ class PCAHealthIndex:
         self.n_components: int = hi_cfg["n_components"]  # always 1 for HI
         self.normalize: bool = hi_cfg["normalize"]  # should always be True
         self.invert: bool = hi_cfg["invert"]  # default True; validated below
+        self.by_dataset: dict[str, float] = {
+            str(key): float(value)
+            for key, value in hi_cfg.get("by_dataset", {}).items()
+        }
+        self.min_explained_variance: float = float(
+            hi_cfg.get("min_explained_variance", 0.60)
+        )
+        self.enforce_variance_gate: bool = bool(
+            hi_cfg.get("enforce_variance_gate", True)
+        )
         self.selected_sensors: list[str] = config["selected_sensors"]
+        self.dataset_name: str = str(config.get("dataset", {}).get("name", ""))
         self.random_state: int = config.get(
             "random_state", 42
         )  # for PCA reproducibility
@@ -172,9 +184,29 @@ class PCAHealthIndex:
         self._hi_max: Optional[float] = None
         self._artifacts: Optional[HealthIndexArtifacts] = None
 
-        # ----------------------------------------------------------
-        # Private Helpers
-        # ----------------------------------------------------------
+    def _resolve_min_explained_variance(self) -> float:
+        """
+        Resolve the minimum explained-variance gate for the current dataset.
+
+        Purpose:
+            Allow dataset-specific calibration while keeping the config-driven default.
+        Input shape:
+            DataFrame with dataset metadata or a config-derived dataset name.
+        Output shape:
+            Single float threshold.
+        Assumptions:
+            The active dataset name was captured from config during init.
+        Failure conditions:
+            Returns the configured default threshold if no dataset-specific
+            override is present.
+        """
+        return float(
+            self.by_dataset.get(self.dataset_name, self.min_explained_variance)
+        )
+
+    # ----------------------------------------------------------
+    # Private Helpers
+    # ----------------------------------------------------------
 
     def _extract_sensor_matrix(self, df: pd.DataFrame) -> np.ndarray:
         """
@@ -317,14 +349,17 @@ class PCAHealthIndex:
         self._pca = PCA(n_components=self.n_components, random_state=self.random_state)
         scores_raw = self._pca.fit_transform(X).ravel()  # shape: (n_rows,)
 
-        # Warn if degradation signal is weak
+        # Enforce explained-variance floor for physical HI reliability.
         ev = self._pca.explained_variance_ratio_[0]
-        if ev < 0.20:
-            warnings.warn(
-                f"PC1 explains only {ev:.1%} of variance. "
-                "Degradation signal may be weak relative to noise.",
-                UserWarning,
+        min_explained_variance = self._resolve_min_explained_variance()
+        if ev < min_explained_variance:
+            message = (
+                f"PC1 explained variance gate failed: {ev:.1%} < "
+                f"{min_explained_variance:.1%}."
             )
+            if self.enforce_variance_gate:
+                raise ValueError(message)
+            warnings.warn(message, UserWarning)
 
         # Fit normalisation bounds on raw training scores
         self._hi_min = float(scores_raw.min())
@@ -422,33 +457,229 @@ class PCAHealthIndex:
 # ------------------------------------------------------------------
 
 
+def _axis_sensor_config(config: dict) -> dict[str, list[str]]:
+    """Resolve axis sensor lists from config.
+
+    Purpose:
+        Read health_index axis definitions for dual HI construction.
+    Input shape:
+        config dict loaded from YAML.
+    Output shape:
+        Dict with keys {"hpc", "fan"} and list[str] sensor columns.
+    Assumptions:
+        config contains health_index.axes.hpc.sensors and fan.sensors.
+    Failure conditions:
+        Raises KeyError when required axis entries are missing.
+    """
+    try:
+        axes_cfg = config["health_index"]["axes"]
+        hpc_sensors = list(axes_cfg["hpc"]["sensors"])
+        fan_sensors = list(axes_cfg["fan"]["sensors"])
+    except KeyError as exc:
+        raise KeyError(
+            "Missing required config key for dual HI axes: "
+            "health_index.axes.hpc.sensors and/or health_index.axes.fan.sensors."
+        ) from exc
+
+    return {"hpc": hpc_sensors, "fan": fan_sensors}
+
+
+def _run_variance_gate(
+    axis_name: str,
+    explained_variance: float,
+    config: dict,
+) -> None:
+    """Apply dataset-aware PC1 explained-variance gate.
+
+    Purpose:
+        Enforce or warn on weak axis signal quality.
+    Input shape:
+        axis_name string, explained_variance scalar, config dict.
+    Output shape:
+        None.
+    Assumptions:
+        variance gate configuration exists in config["health_index"]["variance_gate"].
+    Failure conditions:
+        Raises ValueError in block mode when explained variance is below threshold.
+    """
+    gate_cfg = config.get("health_index", {}).get("variance_gate", {})
+    if not bool(gate_cfg.get("enabled", False)):
+        return
+
+    mode = str(gate_cfg.get("mode", "warn")).lower()
+    dataset_name = str(config.get("dataset", {}).get("name", ""))
+    threshold = float(gate_cfg.get("by_dataset", {}).get(dataset_name, 0.0))
+
+    if explained_variance >= threshold:
+        return
+
+    message = (
+        f"{axis_name.upper()} PC1 explained variance gate failed: "
+        f"{explained_variance:.1%} < {threshold:.1%} for dataset {dataset_name or 'UNKNOWN'}."
+    )
+    if mode == "block":
+        raise ValueError(message)
+    warnings.warn(message, UserWarning)
+
+
+def build_dual_health_index(
+    df: pd.DataFrame,
+    config: dict,
+) -> tuple[pd.DataFrame, dict, dict]:
+    """
+    Purpose:   Build two Health Index axes (HPC and Fan) via separate PCAs.
+    Input:     DataFrame (N, M) with scaled sensor columns + unit + cycle.
+               config with health_index.axes.hpc.sensors and fan.sensors.
+    Output:    DataFrame with HI_hpc and HI_fan columns added (N, M+2),
+               dict of fitted PCA objects keyed by axis name,
+               dict of fitted MinMaxScaler objects keyed by axis name.
+    Assumes:   Sensor columns are already regime-normalised.
+               PC1 is the degradation direction for both axes.
+               HI is normalised to [0,1] where 1=healthy, 0=failure.
+    Fails:     KeyError if any sensor in config axes is missing from df.
+               ValueError if PC1 variance gate fails in block mode.
+    """
+    sensor_map = _axis_sensor_config(config)
+    result = df.copy()
+    pca_by_axis: dict[str, PCA] = {}
+    scaler_by_axis: dict[str, MinMaxScaler] = {}
+
+    if "cycle" not in result.columns:
+        raise KeyError("Column 'cycle' is required for HI sign alignment.")
+
+    cycle_values = result["cycle"].to_numpy(dtype=float)
+
+    for axis_name, sensors in sensor_map.items():
+        missing = [sensor for sensor in sensors if sensor not in result.columns]
+        if missing:
+            raise KeyError(f"Missing sensor columns for axis '{axis_name}': {missing}.")
+
+        x_values = result[sensors].to_numpy(dtype=float)
+        pca = PCA(n_components=1, random_state=int(config.get("random_state", 42)))
+        pc1_scores = pca.fit_transform(x_values).ravel()
+
+        # Align direction so degradation always trends downward over cycle.
+        corr = np.corrcoef(cycle_values, pc1_scores)[0, 1]
+        if np.isnan(corr):
+            corr = 0.0
+        flip_sign = corr > 0
+        if flip_sign:
+            pc1_scores = -pc1_scores
+
+        scaler = MinMaxScaler()
+        hi_values = scaler.fit_transform(pc1_scores.reshape(-1, 1)).ravel()
+        hi_values = np.clip(hi_values, 0.0, 1.0)
+
+        _run_variance_gate(axis_name, float(pca.explained_variance_ratio_[0]), config)
+
+        result[f"HI_{axis_name}"] = hi_values
+        setattr(pca, "_hi_flip_sign", bool(flip_sign))
+        pca_by_axis[axis_name] = pca
+        scaler_by_axis[axis_name] = scaler
+
+    return result, pca_by_axis, scaler_by_axis
+
+
+def apply_dual_health_index(
+    df: pd.DataFrame,
+    pca_by_axis: dict,
+    scaler_by_axis: dict,
+    config: dict,
+) -> pd.DataFrame:
+    """Apply fitted dual-axis PCA+scalers to non-training data.
+
+    Purpose:
+        Transform validation/test/inference rows with training-fitted artifacts.
+    Input shape:
+        DataFrame (N, M), axis PCA dict, axis scaler dict, config dict.
+    Output shape:
+        DataFrame with HI_hpc and HI_fan added.
+    Assumptions:
+        pca_by_axis and scaler_by_axis were fitted on training data.
+    Failure conditions:
+        Raises KeyError for missing sensors or missing axis artifacts.
+    """
+    sensor_map = _axis_sensor_config(config)
+    result = df.copy()
+
+    for axis_name, sensors in sensor_map.items():
+        if axis_name not in pca_by_axis or axis_name not in scaler_by_axis:
+            raise KeyError(
+                f"Missing fitted artifacts for axis '{axis_name}'. "
+                "Expected both PCA and MinMaxScaler."
+            )
+
+        missing = [sensor for sensor in sensors if sensor not in result.columns]
+        if missing:
+            raise KeyError(f"Missing sensor columns for axis '{axis_name}': {missing}.")
+
+        x_values = result[sensors].to_numpy(dtype=float)
+        pc1_scores = pca_by_axis[axis_name].transform(x_values).ravel()
+        if bool(getattr(pca_by_axis[axis_name], "_hi_flip_sign", False)):
+            pc1_scores = -pc1_scores
+
+        hi_values = (
+            scaler_by_axis[axis_name].transform(pc1_scores.reshape(-1, 1)).ravel()
+        )
+        result[f"HI_{axis_name}"] = np.clip(hi_values, 0.0, 1.0)
+
+    return result
+
+
 def build_health_index(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     config: dict,
 ) -> tuple[pd.DataFrame, pd.DataFrame, HealthIndexArtifacts]:
-    """
-    Top-level entry point for the health index pipeline.
+    """Backward-compatible health-index builder.
 
     Purpose:
-        Wraps PCAHealthIndex fit/transform into a single call,
-        matching the interface pattern of preprocess_train / preprocess_test.
-
-    Input:
-        train_df — output of preprocess_train()  (shape: 20631 × n_cols for FD001)
-        test_df  — output of preprocess_test()   (shape: 13096 × n_cols for FD001)
-        config   — loaded config dict
-
-    Output:
-        train_with_hi  — training DataFrame with 'health_index' column
-        test_with_hi   — test DataFrame with 'health_index' column
-        artifacts      — HealthIndexArtifacts for logging and downstream use
-
+        Build dual HI axes and expose legacy `health_index` as `HI_hpc`.
+    Input shape:
+        train_df/test_df with scaled sensors + unit + cycle.
+    Output shape:
+        train/test DataFrames containing HI_hpc, HI_fan, and health_index.
+        HealthIndexArtifacts populated from the HPC axis for legacy consumers.
     Assumptions:
-        Sensors are already standardised. PCA is sensitive to scale.
+        Dual-axis configuration is present under health_index.axes.
+    Failure conditions:
+        Propagates dual-axis builder/transform validation failures.
     """
-    hi = PCAHealthIndex(config)
-    train_with_hi = hi.fit_transform(train_df)
-    test_with_hi = hi.transform(test_df)
-    artifacts = hi.get_artifacts()
-    return train_with_hi, test_with_hi, artifacts
+    train_with_dual, pca_by_axis, scaler_by_axis = build_dual_health_index(
+        train_df, config
+    )
+    test_with_dual = apply_dual_health_index(
+        test_df, pca_by_axis, scaler_by_axis, config
+    )
+
+    train_with_dual["health_index"] = train_with_dual["HI_hpc"]
+    test_with_dual["health_index"] = test_with_dual["HI_hpc"]
+
+    hpc_sensors = _axis_sensor_config(config)["hpc"]
+    hpc_pca = pca_by_axis["hpc"]
+    hpc_loadings = pd.Series(
+        hpc_pca.components_[0],
+        index=hpc_sensors,
+        name="PC1_loading",
+    ).sort_values(key=abs, ascending=False)
+
+    hpc_values = train_with_dual["HI_hpc"].to_numpy(dtype=float)
+    mono_scores = {}
+    for unit_id, group in train_with_dual.groupby("unit"):
+        rho_result = spearmanr(group["cycle"].values, group["HI_hpc"].values)
+        rho_value = float(np.asarray(rho_result[0]).item())
+        if np.isnan(rho_value):
+            rho_value = 0.0
+        mono_scores[str(unit_id)] = round(rho_value, 4)
+
+    artifacts = HealthIndexArtifacts(
+        explained_variance_ratio=float(hpc_pca.explained_variance_ratio_[0]),
+        sensor_loadings=hpc_loadings,
+        loadings=hpc_pca.components_[0],
+        invert=False,
+        hi_min=float(hpc_values.min()),
+        hi_max=float(hpc_values.max()),
+        pca=hpc_pca,
+        monotonicity_score=mono_scores,
+    )
+    return train_with_dual, test_with_dual, artifacts

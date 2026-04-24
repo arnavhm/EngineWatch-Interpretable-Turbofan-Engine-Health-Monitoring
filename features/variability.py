@@ -31,6 +31,7 @@ Failure conditions:
 """
 
 import pandas as pd
+import numpy as np
 from dataclasses import dataclass
 from typing import Optional
 
@@ -58,7 +59,10 @@ class VariabilityArtifacts:
 
 
 def _compute_raw_variability(
-    df: pd.DataFrame, window: int, min_periods: int
+    df: pd.DataFrame,
+    hi_column: str,
+    window: int,
+    min_periods: int,
 ) -> pd.Series:
     """
     Compute rolling std of health_index per engine.
@@ -75,7 +79,7 @@ def _compute_raw_variability(
     Mathematical definition:
         var(t) = std(HI[t-w+1 : t+1])  using Bessel-corrected std (ddof=1)
     """
-    return df.groupby("unit")["health_index"].transform(
+    return df.groupby("unit")[hi_column].transform(
         lambda s: s.rolling(window=window, min_periods=min_periods).std()
     )
 
@@ -152,11 +156,14 @@ def compute_variability(
         - KeyError: health_index column missing or config keys missing
         - ValueError: window_size < 2, min_periods < 1, or variability is constant
     """
-    # Validate required column
-    if "health_index" not in df.columns:
+    required_hi_cols = ["HI_hpc", "HI_fan"]
+    missing_hi_cols = [
+        column for column in required_hi_cols if column not in df.columns
+    ]
+    if missing_hi_cols:
         raise KeyError(
-            "Column 'health_index' not found. "
-            "Run features/health_index.py before computing variability."
+            f"Missing HI axis columns for variability computation: {missing_hi_cols}. "
+            "Run dual-axis features/health_index.py before computing variability."
         )
 
     # Extract and validate window parameters
@@ -181,43 +188,49 @@ def compute_variability(
             "Update config['rolling']['min_periods']."
         )
 
-    # Validate health_index range
-    if not df["health_index"].between(0.0, 1.0).all():
-        raise ValueError(
-            "health_index contains values outside [0, 1]. "
-            "Check health_index computation for normalization errors."
-        )
+    tolerance = 1e-9
+    for hi_column in required_hi_cols:
+        if not pd.Series(df[hi_column]).map(np.isfinite).all():
+            raise ValueError(
+                f"{hi_column} contains non-finite values. "
+                "Check health_index computation for invalid outputs."
+            )
+        if not df[hi_column].between(0.0 - tolerance, 1.0 + tolerance).all():
+            raise ValueError(
+                f"{hi_column} contains values outside [0, 1]. "
+                "Check health_index computation for normalization errors."
+            )
 
     # Sort defensively — rolling window requires chronological order within each engine
     df = df.sort_values(["unit", "cycle"]).copy()
 
-    # Compute raw rolling std per engine
-    raw_var = _compute_raw_variability(df, window, min_periods)
+    # HPC variability anchors legacy artifacts for backward compatibility.
+    raw_hpc = _compute_raw_variability(df, "HI_hpc", window, min_periods).fillna(0.0)
+    raw_fan = _compute_raw_variability(df, "HI_fan", window, min_periods).fillna(0.0)
 
-    # Fill any NaN from min_periods constraint with 0 (no variability yet)
-    raw_var = raw_var.fillna(0.0)
-
-    # Normalise — fit on train, apply fitted params on test
     if artifacts is None:
-        # Training mode: fit normalisation parameters
-        normalised, var_min, var_max = _normalise_variability(raw_var)
-        mean_var = float(normalised.mean())
-        std_var = float(normalised.std())
+        hpc_norm, var_min, var_max = _normalise_variability(raw_hpc)
+        fan_norm, _, _ = _normalise_variability(raw_fan)
         artifacts = VariabilityArtifacts(
             window_size=window,
             min_periods=min_periods,
             var_min=var_min,
             var_max=var_max,
-            mean_variability=mean_var,
-            std_variability=std_var,
+            mean_variability=float(hpc_norm.mean()),
+            std_variability=float(hpc_norm.std()),
         )
     else:
-        # Test mode: apply training normalisation parameters
-        normalised, _, _ = _normalise_variability(
-            raw_var, var_min=artifacts.var_min, var_max=artifacts.var_max
+        hpc_norm, _, _ = _normalise_variability(
+            raw_hpc,
+            var_min=artifacts.var_min,
+            var_max=artifacts.var_max,
         )
+        fan_norm, _, _ = _normalise_variability(raw_fan)
 
-    df["HI_variability"] = normalised
+    df["HI_hpc_variability"] = hpc_norm
+    df["HI_fan_variability"] = fan_norm
+    # Legacy alias retained during transition.
+    df["HI_variability"] = df["HI_hpc_variability"]
     return df, artifacts
 
 

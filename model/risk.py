@@ -39,7 +39,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from model.clustering import CLUSTER_FEATURES, ClusteringArtifacts
+from model.clustering import ClusteringArtifacts
 
 
 @dataclass
@@ -91,62 +91,36 @@ class RiskScorer:
             )
         self._artifacts = clustering_artifacts
 
-    def _get_critical_centroid_scaled(self) -> np.ndarray:
-        """
-        Purpose:
-            Retrieve Critical cluster centroid in scaled feature space.
-
-        Input shape:
-            Uses in-memory ClusteringArtifacts.label_to_cluster and KMeans centroids.
-
-        Output shape:
-            NumPy array of shape (3,).
-
-        Assumptions:
-            label_to_cluster contains "Critical".
-
-        Failure conditions:
-            Raises KeyError if "Critical" label is absent.
-        """
-        label_to_cluster = self._artifacts.label_to_cluster
-        if "Critical" not in label_to_cluster:
-            raise KeyError(
-                "Cluster label mapping does not contain 'Critical'. "
-                "Verify clustering label mapping logic."
-            )
-        critical_cluster_idx = label_to_cluster["Critical"]
-        return self._artifacts.kmeans.cluster_centers_[critical_cluster_idx]
-
     def _compute_distances(self, df: pd.DataFrame) -> np.ndarray:
         """
         Purpose:
-            Compute Euclidean distance to the Critical centroid for each row.
+            Compute conservative degradation distance from dual HI axes.
 
         Input shape:
-            DataFrame (n_rows, n_cols) containing CLUSTER_FEATURES.
+            DataFrame (n_rows, n_cols) containing HI_hpc and HI_fan.
 
         Output shape:
-            NumPy array (n_rows,).
+            NumPy array (n_rows,) in [0, 1] prior to train normalization.
 
         Assumptions:
-            Data is already prepared by upstream feature pipeline.
+            Lower HI means worse health; the weaker axis dominates risk.
 
         Failure conditions:
-            Raises KeyError for missing features.
+            Raises KeyError for missing HI axis columns.
         """
-        missing = [feature for feature in CLUSTER_FEATURES if feature not in df.columns]
+        required = ["HI_hpc", "HI_fan"]
+        missing = [feature for feature in required if feature not in df.columns]
         if missing:
             raise KeyError(
                 f"Required risk features missing: {missing}. "
-                "Ensure clustering features were built before risk scoring."
+                "Ensure dual-axis health index features were built before risk scoring."
             )
 
-        x_values = df[CLUSTER_FEATURES].values
-        x_scaled = self._artifacts.scaler.transform(x_values)
-        critical_centroid = self._get_critical_centroid_scaled()
-
-        diff = x_scaled - critical_centroid
-        distances = np.sqrt((diff**2).sum(axis=1))
+        operative_health = np.minimum(
+            df["HI_hpc"].to_numpy(dtype=float),
+            df["HI_fan"].to_numpy(dtype=float),
+        )
+        distances = 1.0 - np.clip(operative_health, 0.0, 1.0)
         return distances
 
     def _normalise_and_invert(

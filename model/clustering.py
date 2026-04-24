@@ -37,6 +37,7 @@ Failure conditions:
 
 import numpy as np
 import pandas as pd
+import logging
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
@@ -48,7 +49,7 @@ import warnings
 # The three features that describe degradation state in this system.
 # These are the only approved inputs — do not add features here without
 # updating the architecture charter.
-CLUSTER_FEATURES = ["health_index", "HI_velocity", "HI_variability"]
+CLUSTER_FEATURES = ["HI_hpc", "HI_fan", "HI_hpc_velocity", "HI_fan_velocity"]
 
 # Human-readable label mapping — ordered from healthiest to most critical.
 # These strings are used directly in the Streamlit dashboard.
@@ -97,10 +98,12 @@ class DegradationClusterer:
             self.n_clusters: int = cl_cfg["n_clusters"]  # always 3
             self.random_state: int = cl_cfg["random_state"]  # always 42
             self.n_init: int = cl_cfg["n_init"]  # typically 10
+            self.velocity_window: int = int(config["features"]["velocity"]["window"])
         except KeyError as e:
             raise KeyError(
                 f"Config missing required clustering key: {e}. "
-                "Check config/config.yaml for clustering.n_clusters, clustering.random_state, and clustering.n_init."
+                "Check config/config.yaml for clustering.n_clusters, clustering.random_state, "
+                "clustering.n_init, and features.velocity.window."
             )
 
         if self.n_clusters != 3:
@@ -141,6 +144,36 @@ class DegradationClusterer:
                 "Resolve NaN before clustering — check edge case handling in velocity.py."
             )
 
+    def _drop_rows_with_nan_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Drop rows with NaN values in clustering features before validation.
+
+        Purpose:
+            Remove early-window rows that naturally lack HI_velocity/HI_variability
+            while keeping feature semantics unchanged (no interpolation/fill).
+        Input shape:
+            DataFrame containing clustering feature columns.
+        Output shape:
+            Filtered DataFrame with NaN feature rows removed.
+        Assumptions:
+            Expected NaN rows are primarily from the first (window-1) cycles.
+        Failure conditions:
+            None. Returns original DataFrame if no NaNs are present.
+        """
+        feature_cols = [column for column in df.columns if column in CLUSTER_FEATURES]
+        nan_mask = df[feature_cols].isna().any(axis=1)
+        dropped_rows = int(nan_mask.sum())
+        if dropped_rows > 0:
+            expected_prefix_cycles = max(self.velocity_window - 1, 0)
+            logging.warning(
+                "Dropping %d rows with NaN clustering features "
+                "(expected: first %d cycles per engine from velocity window)",
+                dropped_rows,
+                expected_prefix_cycles,
+            )
+            return df.loc[~nan_mask].copy()
+        return df
+
     def _map_clusters_to_labels(self, df: pd.DataFrame, raw_labels: np.ndarray) -> dict:
         """
         Map raw KMeans integer labels to risk state strings.
@@ -166,9 +199,15 @@ class DegradationClusterer:
             RuntimeError if cluster count != expected (can occur if KMeans collapses clusters)
         """
         temp = pd.DataFrame(
-            {"cluster": raw_labels, "health_index": df["health_index"].values}
+            {
+                "cluster": raw_labels,
+                "health_signal": np.minimum(
+                    df["HI_hpc"].values,
+                    df["HI_fan"].values,
+                ),
+            }
         )
-        mean_hi_per_cluster = temp.groupby("cluster")["health_index"].mean()
+        mean_hi_per_cluster = temp.groupby("cluster")["health_signal"].mean()
 
         # Sort clusters by mean HI descending: highest HI = Healthy, lowest = Critical
         sorted_clusters = mean_hi_per_cluster.sort_values(
@@ -220,9 +259,10 @@ class DegradationClusterer:
         summary["risk_state"] = [
             self._cluster_to_label[i] for i in range(self.n_clusters)
         ]
+        summary["health_signal"] = np.minimum(summary["HI_hpc"], summary["HI_fan"])
         return (
-            summary[["risk_state"] + CLUSTER_FEATURES]
-            .sort_values("health_index", ascending=False)
+            summary[["risk_state"] + CLUSTER_FEATURES + ["health_signal"]]
+            .sort_values("health_signal", ascending=False)
             .reset_index(drop=True)
         )
 
@@ -251,6 +291,7 @@ class DegradationClusterer:
             - Missing or NaN features → see _validate_features()
             - Silhouette score < 0.3 → UserWarning
         """
+        df = self._drop_rows_with_nan_features(df)
         self._validate_features(df)
 
         X = df[CLUSTER_FEATURES].values  # shape: (n_rows, 3)
@@ -330,6 +371,7 @@ class DegradationClusterer:
                 "Always fit on training data first."
             )
 
+        df = self._drop_rows_with_nan_features(df)
         self._validate_features(df)
 
         # Type assertions for type checker (runtime guard above ensures these are not None)

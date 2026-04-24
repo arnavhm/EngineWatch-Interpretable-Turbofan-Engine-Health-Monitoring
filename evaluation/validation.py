@@ -34,7 +34,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from scipy.stats import pearsonr, spearmanr
+from scipy.stats import chi2, pearsonr, spearmanr
 
 
 REQUIRED_COLUMNS: list[str] = [
@@ -316,12 +316,12 @@ def _validate_risk_rul_correlation(df: pd.DataFrame) -> tuple[float, float]:
 
 def detect_anomalous_engines(
     df: pd.DataFrame,
-    feature_cols: list = ["health_index", "HI_velocity", "HI_variability"],
-    threshold: float = 3.0,
+    feature_cols: Optional[list[str]] = None,
+    chi_square_p_value: float = 0.99,
 ) -> pd.DataFrame:
     """
     Flag engines whose degradation trajectory deviates significantly from
-    the fleet average using Mahalanobis distance on last-cycle features.
+    the fleet average using a chi-square gated Mahalanobis test on last-cycle features.
 
     Purpose:
         The RUL model was trained on 100 engines. If a test engine degrades
@@ -333,13 +333,13 @@ def detect_anomalous_engines(
         For each engine's last-cycle feature vector x:
             d = sqrt((x - mu)^T * Sigma^-1 * (x - mu))
         where mu = fleet mean vector, Sigma = fleet covariance matrix.
-        Engines with d > threshold * median(d) are flagged as anomalous.
+        Engines with d^2 > chi2.ppf(p, dof) are flagged as anomalous.
 
     Input:
         df           - DataFrame with all engines, must contain feature_cols
                        and unit column
         feature_cols - features to use for distance computation
-        threshold    - multiplier above median distance to flag as anomalous
+        chi_square_p_value - p-value for chi-square cutoff (default 0.99)
 
     Output:
         DataFrame with columns:
@@ -356,6 +356,9 @@ def detect_anomalous_engines(
     """
     from scipy.linalg import inv
     from scipy.spatial.distance import mahalanobis
+
+    if feature_cols is None:
+        feature_cols = ["health_index", "HI_velocity", "HI_variability"]
 
     last_cycle = df.sort_values("cycle").groupby("unit").last().reset_index()
 
@@ -374,19 +377,28 @@ def detect_anomalous_engines(
     except np.linalg.LinAlgError:
         distances = np.linalg.norm(X - mu, axis=1)
 
-    median_dist = np.median(distances)
-    is_anomaly = distances > threshold * median_dist
+    distances_sq = distances**2
+    dof = len(feature_cols)
+    threshold_sq = float(chi2.ppf(chi_square_p_value, dof))
+    is_anomaly = distances_sq > threshold_sq
 
     result = pd.DataFrame(
         {
             "unit": last_cycle["unit"].values,
             "mahalanobis_distance": np.round(distances, 3),
+            "mahalanobis_distance_sq": np.round(distances_sq, 3),
+            "chi_square_threshold": round(threshold_sq, 3),
+            "chi_square_p_value": float(chi_square_p_value),
+            "degrees_of_freedom": int(dof),
             "is_anomaly": is_anomaly,
             "anomaly_reason": [
-                f"Distance {d:.2f} exceeds threshold {threshold * median_dist:.2f}"
+                (
+                    f"Mahalanobis^2 {d2:.2f} exceeds chi-square threshold "
+                    f"{threshold_sq:.2f} at p={chi_square_p_value:.2f}"
+                )
                 if a
                 else "Within normal fleet range"
-                for d, a in zip(distances, is_anomaly)
+                for d2, a in zip(distances_sq, is_anomaly)
             ],
         }
     )
@@ -414,6 +426,14 @@ def run_validation(df: pd.DataFrame, config: Optional[dict] = None) -> Validatio
     """
     _validate_columns(df)
     monotonicity_threshold, weak_corr_threshold = _resolve_thresholds(config)
+
+    validation_cfg = (config or {}).get("validation", {})
+    anomaly_p_value = float(validation_cfg.get("anomaly_chi_square_p_value", 0.99))
+    enforce_anomaly_gate = bool(validation_cfg.get("enforce_anomaly_gate", False))
+    anomaly_feature_cols = validation_cfg.get(
+        "anomaly_feature_cols",
+        ["health_index", "HI_velocity", "HI_variability"],
+    )
 
     engine_ids_array = np.sort(df["unit"].unique())
     engine_ids: list[int] = [int(unit_id) for unit_id in engine_ids_array.tolist()]
@@ -476,6 +496,30 @@ def run_validation(df: pd.DataFrame, config: Optional[dict] = None) -> Validatio
         weak_risk_rul_correlation_threshold=weak_corr_threshold,
         anomalous_engines=anomalous_engines,
     )
+
+    if len(engine_ids) >= 10:
+        anomaly_df = detect_anomalous_engines(
+            df,
+            feature_cols=anomaly_feature_cols,
+            chi_square_p_value=anomaly_p_value,
+        )
+        anomaly_units = anomaly_df.loc[anomaly_df["is_anomaly"], "unit"].tolist()
+        if anomaly_units:
+            unique_units = sorted({int(unit_id) for unit_id in anomaly_units})
+            report.anomalous_engines = sorted(
+                set(report.anomalous_engines).union(unique_units)
+            )
+            if enforce_anomaly_gate:
+                raise RuntimeError(
+                    "Anomaly gate failed: engines exceed Mahalanobis chi-square "
+                    f"threshold (p={anomaly_p_value:.2f}): {unique_units}"
+                )
+    else:
+        warnings.warn(
+            "Anomaly gate skipped: fewer than 10 engines available for stable "
+            "Mahalanobis covariance estimation.",
+            UserWarning,
+        )
 
     if pearson_r > weak_corr_threshold:
         warnings.warn(

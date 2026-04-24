@@ -15,6 +15,11 @@ import joblib
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
+from data.regime import RegimeScaler, fit_regime_scaler
+
+
+ScalerType = StandardScaler | RegimeScaler
+
 
 def _validate_preprocess_config(config: dict) -> None:
     """
@@ -48,6 +53,34 @@ def _validate_preprocess_config(config: dict) -> None:
     ]
     if missing_dataset_keys:
         raise KeyError(f"Missing dataset config keys: {missing_dataset_keys}")
+
+    if _regime_enabled(config):
+        if "regimes" not in config:
+            raise KeyError("Missing config key: regimes")
+        regime_cfg = config["regimes"]
+        for key in ("n_regimes", "setting_cols"):
+            if key not in regime_cfg:
+                raise KeyError(f"Missing config key: regimes.{key}")
+        if (
+            not isinstance(regime_cfg["setting_cols"], list)
+            or not regime_cfg["setting_cols"]
+        ):
+            raise ValueError(
+                "config['regimes']['setting_cols'] must be a non-empty list"
+            )
+
+
+def _regime_enabled(config: dict) -> bool:
+    """Return True when regime-aware scaling is enabled in config."""
+    return bool(config.get("regimes", {}).get("enabled", False))
+
+
+def _regime_setting_cols(config: dict) -> list[str]:
+    """Return configured operating-setting columns for regime dispatch."""
+    if not _regime_enabled(config):
+        return []
+    setting_cols = config["regimes"].get("setting_cols", [])
+    return [str(column) for column in setting_cols]
 
 
 def compute_rul(df: pd.DataFrame) -> pd.DataFrame:
@@ -114,6 +147,41 @@ def select_sensors(df: pd.DataFrame, selected_sensors: list[str]) -> pd.DataFram
     return df[output_columns].copy()
 
 
+def select_sensors_with_settings(
+    df: pd.DataFrame,
+    selected_sensors: list[str],
+    setting_cols: list[str],
+) -> pd.DataFrame:
+    """
+    Select identifiers, operating settings, and configured sensor columns.
+
+    Purpose:
+        Keep `unit`, `cycle`, setting columns, configured sensors, and optional `RUL`.
+    Input shape:
+        DataFrame with CMAPSS columns.
+    Output shape:
+        DataFrame with columns [`unit`, `cycle`] + setting_cols + selected_sensors
+        + optional [`RUL`].
+    Assumptions:
+        Setting and sensor names come from config and must be present in dataframe.
+    Failure conditions:
+        Raises KeyError if required columns are missing.
+    """
+    base_columns = ["unit", "cycle"]
+    required_columns = base_columns + list(setting_cols) + list(selected_sensors)
+    missing_columns = [
+        column for column in required_columns if column not in df.columns
+    ]
+    if missing_columns:
+        raise KeyError(f"Configured columns not found in dataframe: {missing_columns}")
+
+    output_columns = list(dict.fromkeys(required_columns))
+    if "RUL" in df.columns:
+        output_columns.append("RUL")
+
+    return df[output_columns].copy()
+
+
 def fit_scaler(df: pd.DataFrame, sensor_cols: list[str]) -> StandardScaler:
     """
     Fit StandardScaler on training sensor columns only.
@@ -139,7 +207,7 @@ def fit_scaler(df: pd.DataFrame, sensor_cols: list[str]) -> StandardScaler:
 
 
 def apply_scaler(
-    df: pd.DataFrame, sensor_cols: list[str], scaler: StandardScaler
+    df: pd.DataFrame, sensor_cols: list[str], scaler: ScalerType
 ) -> pd.DataFrame:
     """
     Apply a fitted scaler to sensor columns while preserving identifiers.
@@ -164,6 +232,12 @@ def apply_scaler(
     if scaler.n_features_in_ != len(sensor_cols):
         raise ValueError(
             f"Scaler expects {scaler.n_features_in_} features, received {len(sensor_cols)}"
+        )
+
+    if isinstance(scaler, RegimeScaler) and configures_multiple_regimes(scaler):
+        raise ValueError(
+            "RegimeScaler with n_regimes > 1 requires operating-setting columns. "
+            "Use RegimeScaler.transform_df(df, sensor_cols) instead of apply_scaler()."
         )
 
     scaled_df = df.copy()
@@ -195,7 +269,7 @@ def preprocess_train(
     df: pd.DataFrame,
     config: dict,
     persist_outputs: bool = True,
-) -> Tuple[pd.DataFrame, StandardScaler, list[str]]:
+) -> Tuple[pd.DataFrame, ScalerType, list[str]]:
     """
     Preprocess training data end-to-end.
 
@@ -215,10 +289,20 @@ def preprocess_train(
     sensor_cols: list[str] = config["selected_sensors"]
 
     train_with_rul = compute_rul(df)
-    train_selected = select_sensors(train_with_rul, sensor_cols)
 
-    scaler = fit_scaler(train_selected, sensor_cols)
-    train_processed = apply_scaler(train_selected, sensor_cols, scaler)
+    if _regime_enabled(config):
+        setting_cols = _regime_setting_cols(config)
+        train_selected = select_sensors_with_settings(
+            train_with_rul,
+            sensor_cols,
+            setting_cols,
+        )
+        scaler = fit_regime_scaler(train_selected, sensor_cols, config)
+        train_processed = scaler.transform_df(train_selected, sensor_cols)
+    else:
+        train_selected = select_sensors(train_with_rul, sensor_cols)
+        scaler = fit_scaler(train_selected, sensor_cols)
+        train_processed = apply_scaler(train_selected, sensor_cols, scaler)
 
     processed_path = Path(config["dataset"]["processed_path"])
     dataset_name = config["dataset"]["name"]
@@ -237,7 +321,7 @@ def preprocess_train(
 def preprocess_test(
     df: pd.DataFrame,
     config: dict,
-    scaler: StandardScaler,
+    scaler: ScalerType,
     persist_outputs: bool = True,
 ) -> pd.DataFrame:
     """
@@ -258,8 +342,21 @@ def preprocess_test(
 
     sensor_cols: list[str] = config["selected_sensors"]
 
-    test_selected = select_sensors(df, sensor_cols)
-    test_processed = apply_scaler(test_selected, sensor_cols, scaler)
+    if _regime_enabled(config):
+        setting_cols = _regime_setting_cols(config)
+        test_selected = select_sensors_with_settings(
+            df,
+            sensor_cols,
+            setting_cols,
+        )
+        if not isinstance(scaler, RegimeScaler):
+            raise TypeError(
+                "Expected RegimeScaler when config['regimes']['enabled'] is True."
+            )
+        test_processed = scaler.transform_df(test_selected, sensor_cols)
+    else:
+        test_selected = select_sensors(df, sensor_cols)
+        test_processed = apply_scaler(test_selected, sensor_cols, scaler)
 
     processed_path = Path(config["dataset"]["processed_path"])
     dataset_name = config["dataset"]["name"]
@@ -268,3 +365,8 @@ def preprocess_test(
         save_processed(test_processed, str(output_file))
 
     return test_processed
+
+
+def configures_multiple_regimes(scaler: RegimeScaler) -> bool:
+    """Return True when a RegimeScaler was configured for more than one regime."""
+    return getattr(scaler, "_n_regimes", 1) > 1

@@ -174,6 +174,7 @@ def test_rul_model_selection_is_deterministic(tmp_path) -> None:
     config["rul"]["save_path"] = str(tmp_path / "models")
     config["rul"]["models"]["random_forest_n_estimators"] = 40
     config["rul"]["models"]["gradient_boosting_n_estimators"] = 40
+    config["rul"].setdefault("safety_gates", {})["enforce_prediction_bias_gate"] = False
 
     pred_df_1, artifacts_1 = build_rul_model(train_df, test_df, config)
     pred_df_2, artifacts_2 = build_rul_model(train_df, test_df, config)

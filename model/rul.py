@@ -47,6 +47,8 @@ Failure Conditions:
 import numpy as np
 import pandas as pd
 import joblib
+import logging
+import warnings
 from pathlib import Path
 from dataclasses import dataclass
 from sklearn.linear_model import LinearRegression
@@ -408,6 +410,53 @@ def _save_artifacts(artifacts: RULArtifacts, save_path: str) -> None:
     joblib.dump(artifacts, path / "rul_artifacts.joblib")
 
 
+def _enforce_prediction_bias_gate(prediction_balance: dict, config: dict) -> None:
+    """
+    Enforce safety-first prediction behavior using Late/Early ratio.
+
+    Gate definition:
+        Late/Early <= configured threshold.
+
+    Supports the new config keys:
+        - late_early_ratio_limit
+        - late_early_gate_mode: block | warn
+
+    Falls back to the previous keys for backward compatibility.
+    """
+    safety_cfg = config.get("rul", {}).get("safety_gates", {})
+    max_ratio = float(
+        safety_cfg.get(
+            "late_early_ratio_limit",
+            safety_cfg.get("max_late_to_early_ratio", 0.25),
+        )
+    )
+    gate_mode = str(
+        safety_cfg.get(
+            "late_early_gate_mode",
+            "block" if safety_cfg.get("enforce_prediction_bias_gate", True) else "warn",
+        )
+    ).lower()
+
+    late_count = int(prediction_balance.get("late", 0))
+    early_count = int(prediction_balance.get("early", 0))
+
+    if early_count == 0:
+        ratio = float("inf") if late_count > 0 else 0.0
+    else:
+        ratio = late_count / early_count
+
+    if ratio > max_ratio:
+        ratio_text = "inf" if np.isinf(ratio) else f"{ratio:.3f}"
+        message = (
+            "Prediction bias gate: Late/Early ratio "
+            f"{ratio_text} exceeds {max_ratio:.3f} "
+            f"({late_count} late vs {early_count} early)."
+        )
+        if gate_mode == "block":
+            raise RuntimeError(message)
+        logging.warning(message)
+
+
 def build_rul_model(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -479,6 +528,7 @@ def build_rul_model(
         "early": int(np.sum(best_errors < 0)),
         "on_time": int(np.sum(best_errors == 0)),
     }
+    _enforce_prediction_bias_gate(prediction_balance, config)
     rf_ci = confidence_intervals.get("random_forest")
     test_predictions_df = pd.DataFrame(
         {

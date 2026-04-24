@@ -105,11 +105,14 @@ def compute_velocity(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         - KeyError: health_index column missing or config key missing
         - ValueError: window_size < 2 or health_index outside [0, 1]
     """
-    # Validate required column
-    if "health_index" not in df.columns:
+    required_hi_cols = ["HI_hpc", "HI_fan"]
+    missing_hi_cols = [
+        column for column in required_hi_cols if column not in df.columns
+    ]
+    if missing_hi_cols:
         raise KeyError(
-            "Column 'health_index' not found. "
-            "Run features/health_index.py before computing velocity."
+            f"Missing HI axis columns for velocity computation: {missing_hi_cols}. "
+            "Run dual-axis features/health_index.py before computing velocity."
         )
 
     # Extract and validate window size
@@ -127,27 +130,33 @@ def compute_velocity(df: pd.DataFrame, config: dict) -> pd.DataFrame:
             "Update config['rolling']['window_size']."
         )
 
-    # Validate health_index range
-    if not df["health_index"].between(0.0, 1.0).all():
-        raise ValueError(
-            "health_index contains values outside [0, 1]. "
-            "Check health_index computation for normalization errors."
-        )
+    tolerance = 1e-9
+    for hi_column in required_hi_cols:
+        if not np.isfinite(df[hi_column].to_numpy(dtype=float)).all():
+            raise ValueError(
+                f"{hi_column} contains non-finite values. "
+                "Check health_index computation for invalid outputs."
+            )
+        if not df[hi_column].between(0.0 - tolerance, 1.0 + tolerance).all():
+            raise ValueError(
+                f"{hi_column} contains values outside [0, 1]. "
+                "Check health_index computation for normalization errors."
+            )
 
     # Sort defensively — polyfit requires chronological order within each engine
     df = df.sort_values(["unit", "cycle"]).copy()
 
-    # Compute rolling slope per engine
-    # groupby prevents cross-engine contamination
-    df["HI_velocity"] = df.groupby("unit")["health_index"].transform(
-        lambda s: rolling_slope(s, window_size)
-    )
+    for hi_column in required_hi_cols:
+        velocity_column = f"{hi_column}_velocity"
+        df[velocity_column] = df.groupby("unit")[hi_column].transform(
+            lambda s: rolling_slope(s, window_size)
+        )
+        df[velocity_column] = df.groupby("unit")[velocity_column].transform(
+            lambda s: s.bfill()
+        )
 
-    # Forward-fill NaN values at the start of each engine's window.
-    # First (window_size - 1) cycles have NaN from rolling window.
-    # bfill() propagates the first valid slope backward, providing
-    # reasonable estimates for early cycles (which have nearly zero degradation).
-    df["HI_velocity"] = df.groupby("unit")["HI_velocity"].transform(lambda s: s.bfill())
+    # Legacy alias retained during transition.
+    df["HI_velocity"] = df["HI_hpc_velocity"]
 
     return df
 
@@ -192,7 +201,8 @@ def build_velocity(
 
     # Gather velocity statistics from combined data for artifact reporting
     all_velocity = pd.concat(
-        [train_velocity["HI_velocity"], test_velocity["HI_velocity"]], ignore_index=True
+        [train_velocity["HI_hpc_velocity"], test_velocity["HI_hpc_velocity"]],
+        ignore_index=True,
     ).dropna()
 
     window_size: int = config["rolling"]["window_size"]
