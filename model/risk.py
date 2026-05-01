@@ -33,6 +33,7 @@ Failure conditions:
     - Constant distances (d_max == d_min) -> ValueError
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Optional
 
@@ -83,18 +84,29 @@ class RiskScorer:
         Raises RuntimeError if required fitted objects are missing.
     """
 
-    def __init__(self, clustering_artifacts: ClusteringArtifacts) -> None:
+    def __init__(
+        self,
+        clustering_artifacts: ClusteringArtifacts,
+        operative_axis: str = "min",
+    ) -> None:
+        """
+        operative_axis: which HI axis to use for distance computation.
+            'min'  — conservative minimum of both axes (original behaviour)
+            'hpc'  — use HI_hpc only (for HPC-fault engines)
+            'fan'  — use HI_fan only (for fan-fault engines)
+        """
         if clustering_artifacts.kmeans is None or clustering_artifacts.scaler is None:
             raise RuntimeError(
                 "ClusteringArtifacts are not fully fitted. "
                 "Run build_clustering() or DegradationClusterer.fit_transform() first."
             )
         self._artifacts = clustering_artifacts
+        self._operative_axis = operative_axis
 
     def _compute_distances(self, df: pd.DataFrame) -> np.ndarray:
         """
         Purpose:
-            Compute conservative degradation distance from dual HI axes.
+            Compute degradation distance using the operative HI axis.
 
         Input shape:
             DataFrame (n_rows, n_cols) containing HI_hpc and HI_fan.
@@ -103,7 +115,9 @@ class RiskScorer:
             NumPy array (n_rows,) in [0, 1] prior to train normalization.
 
         Assumptions:
-            Lower HI means worse health; the weaker axis dominates risk.
+            For HPC-fault engines: distance = 1 - HI_hpc
+            For fan-fault engines: distance = 1 - HI_fan
+            For unified mode:      distance = 1 - min(HI_hpc, HI_fan)
 
         Failure conditions:
             Raises KeyError for missing HI axis columns.
@@ -113,14 +127,24 @@ class RiskScorer:
         if missing:
             raise KeyError(
                 f"Required risk features missing: {missing}. "
-                "Ensure dual-axis health index features were built before risk scoring."
+                "Ensure dual-axis health index was built before risk scoring."
             )
 
-        operative_health = np.minimum(
-            df["HI_hpc"].to_numpy(dtype=float),
-            df["HI_fan"].to_numpy(dtype=float),
-        )
-        distances = 1.0 - np.clip(operative_health, 0.0, 1.0)
+        if self._operative_axis == "hpc":
+            operative_health = df["HI_hpc"].to_numpy(dtype=float)
+            # HI_hpc is naturally directed: higher = healthier
+            distances = 1.0 - np.clip(operative_health, 0.0, 1.0)
+        elif self._operative_axis == "fan":
+            operative_health = df["HI_fan"].to_numpy(dtype=float)
+            # HI_fan is inverted: higher = worse health, so use it directly as distance
+            distances = np.clip(operative_health, 0.0, 1.0)
+        else:
+            operative_health = np.minimum(
+                df["HI_hpc"].to_numpy(dtype=float),
+                df["HI_fan"].to_numpy(dtype=float),
+            )
+            distances = 1.0 - np.clip(operative_health, 0.0, 1.0)
+
         return distances
 
     def _normalise_and_invert(
@@ -160,8 +184,9 @@ class RiskScorer:
                 "Check clustering quality and feature variance."
             )
 
-        normalised = (distances - d_min) / denominator
-        risk_scores = 1.0 - normalised
+        # distance = 1 - HI, so higher distance = worse health = higher risk
+        # Normalise to [0, 1] — no further inversion needed
+        risk_scores = (distances - d_min) / denominator
         risk_scores = np.clip(risk_scores, 0.0, 1.0)
         return risk_scores, risk_artifacts
 
@@ -250,3 +275,77 @@ def build_risk_score(
     train_out, risk_artifacts = scorer.fit_transform(train_df)
     test_out, _ = scorer.transform(test_df, risk_artifacts)
     return train_out, test_out, risk_artifacts
+
+
+def build_risk_score_per_fault_mode(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    clusterers_by_mode: dict,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """
+    Compute risk scores routing each engine to its fault-mode cluster model.
+
+    Purpose:
+        HPC-fault engines scored against HPC cluster centroids.
+        Fan-fault engines scored against fan cluster centroids.
+        This resolves the risk score inversion on FD004 where mixed-fault
+        clustering produced a backwards risk signal.
+
+    Input:
+        train_df:           DataFrame with fault_mode and HI_hpc, HI_fan columns.
+        test_df:            Same schema as train_df.
+        clusterers_by_mode: Dict from build_clustering_per_fault_mode().
+                            Maps 'hpc'/'fan' → ClusteringArtifacts.
+
+    Output:
+        train_with_risk: DataFrame with risk_score column.
+        test_with_risk:  DataFrame with risk_score column.
+        risk_artifacts_by_mode: Dict mapping mode → RiskArtifacts.
+
+    Assumptions:
+        fault_mode column present in both train_df and test_df.
+        clusterers_by_mode keys match fault_mode values in df.
+
+    Failure conditions:
+        KeyError if fault_mode value has no entry in clusterers_by_mode.
+        Falls back to unified scoring if fault_mode column absent.
+    """
+    if "fault_mode" not in train_df.columns:
+        logging.warning(
+            "fault_mode column not found. Falling back to unified risk scoring."
+        )
+        any_artifacts = next(iter(clusterers_by_mode.values()))
+        train_out, test_out, risk_arts = build_risk_score(
+            train_df, test_df, any_artifacts
+        )
+        return train_out, test_out, {"unified": risk_arts}
+
+    fault_modes = train_df["fault_mode"].unique().tolist()
+    risk_artifacts_by_mode: dict = {}
+    train_parts: list[pd.DataFrame] = []
+    test_parts: list[pd.DataFrame] = []
+
+    for mode in fault_modes:
+        train_mode = train_df[train_df["fault_mode"] == mode].copy()
+        test_mode = test_df[test_df["fault_mode"] == mode].copy()
+
+        cl_artifacts = clusterers_by_mode.get(mode)
+        if cl_artifacts is None:
+            raise KeyError(
+                f"No clustering artifacts found for fault_mode='{mode}'. "
+                f"Available modes: {list(clusterers_by_mode.keys())}"
+            )
+
+        operative_axis = mode  # 'hpc' or 'fan' — matches RiskScorer parameter
+        scorer = RiskScorer(cl_artifacts, operative_axis=operative_axis)
+        train_mode_out, risk_arts = scorer.fit_transform(train_mode)
+        test_mode_out, _ = scorer.transform(test_mode, risk_arts)
+
+        risk_artifacts_by_mode[mode] = risk_arts
+        train_parts.append(train_mode_out)
+        test_parts.append(test_mode_out)
+
+    train_out = pd.concat(train_parts).sort_index()
+    test_out = pd.concat(test_parts).sort_index()
+
+    return train_out, test_out, risk_artifacts_by_mode

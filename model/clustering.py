@@ -84,11 +84,12 @@ class DegradationClusterer:
         test_df  = clusterer.transform(test_df)         # applies fitted params
     """
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, operative_axis: str = "min") -> None:
         """
         Initialize clusterer with configuration parameters.
 
         Input:  config dict loaded from config/config.yaml
+                operative_axis: 'min' (both axes), 'hpc', or 'fan' — which HI to use for cluster labeling
         Output: initialised (unfitted) DegradationClusterer
 
         Failure: KeyError if required config keys are missing
@@ -111,6 +112,8 @@ class DegradationClusterer:
                 f"This architecture supports exactly 3 clusters (Healthy/Degrading/Critical). "
                 f"Got n_clusters={self.n_clusters}. Update RISK_LABELS if changing cluster count."
             )
+
+        self._operative_axis: str = operative_axis  # 'min', 'hpc', or 'fan'
 
         # Placeholders — populated only after fit()
         self._scaler: Optional[StandardScaler] = None
@@ -198,13 +201,22 @@ class DegradationClusterer:
         Failure:
             RuntimeError if cluster count != expected (can occur if KMeans collapses clusters)
         """
+        # Select HI axis for cluster ordering based on operative_axis
+        if self._operative_axis == "hpc":
+            health_signal = df["HI_hpc"].values
+        elif self._operative_axis == "fan":
+            health_signal = df["HI_fan"].values
+        else:
+            # Default 'min' for backward compatibility with unified clustering
+            health_signal = np.minimum(
+                df["HI_hpc"].values,
+                df["HI_fan"].values,
+            )
+
         temp = pd.DataFrame(
             {
                 "cluster": raw_labels,
-                "health_signal": np.minimum(
-                    df["HI_hpc"].values,
-                    df["HI_fan"].values,
-                ),
+                "health_signal": health_signal,
             }
         )
         mean_hi_per_cluster = temp.groupby("cluster")["health_signal"].mean()
@@ -445,3 +457,93 @@ def build_clustering(
     test_out = clusterer.transform(test_df)
     artifacts = clusterer.get_artifacts()
     return train_out, test_out, artifacts
+
+
+def build_clustering_per_fault_mode(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    config: dict,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """
+    Fit separate Healthy/Degrading/Critical cluster models per fault mode.
+
+    Purpose:
+        When fault_mode column is present, fit one DegradationClusterer
+        per fault mode on training engines of that type. Apply each
+        clusterer only to engines of the matching fault mode.
+        For single-fault datasets (fault_mode column absent or uniform),
+        falls back to build_clustering() transparently.
+
+    Input:
+        train_df: DataFrame after velocity + variability steps.
+                  Must have fault_mode column from classify_engines().
+        test_df:  Same schema as train_df.
+        config:   Config dict.
+
+    Output:
+        train_with_clusters: Training DataFrame with risk_state column.
+        test_with_clusters:  Test DataFrame with risk_state column.
+        clusterers_by_mode:  Dict mapping 'hpc'/'fan' → ClusteringArtifacts.
+                             Used by build_risk_score_per_fault_mode().
+
+    Assumptions:
+        fault_mode column contains only 'hpc' and/or 'fan' values.
+        Each fault mode has enough engines to support k=3 clustering.
+
+    Failure conditions:
+        Falls back to unified clustering if a fault mode has
+        fewer than n_clusters engines.
+    """
+    if "fault_mode" not in train_df.columns:
+        logging.warning(
+            "fault_mode column not found. Falling back to unified clustering."
+        )
+        train_out, test_out, artifacts = build_clustering(train_df, test_df, config)
+        return train_out, test_out, {"hpc": artifacts, "fan": artifacts}
+
+    fault_modes = train_df["fault_mode"].unique().tolist()
+    min_engines = config["clustering"]["n_clusters"]
+
+    clusterers_by_mode: dict = {}
+    train_parts: list[pd.DataFrame] = []
+    test_parts: list[pd.DataFrame] = []
+
+    for mode in fault_modes:
+        train_mode = train_df[train_df["fault_mode"] == mode].copy()
+        test_mode = test_df[test_df["fault_mode"] == mode].copy()
+
+        n_train_engines = train_mode["unit"].nunique()
+
+        if n_train_engines < min_engines:
+            logging.warning(
+                "Fault mode '%s' has only %d training engines (min=%d). "
+                "Falling back to unified clustering for this mode.",
+                mode,
+                n_train_engines,
+                min_engines,
+            )
+            _, _, unified_artifacts = build_clustering(train_df, test_df, config)
+            clusterers_by_mode[mode] = unified_artifacts
+            train_parts.append(train_mode)
+            test_parts.append(test_mode)
+            continue
+
+        logging.info(
+            "[CLUSTERING] Fitting clusters for fault_mode='%s' (%d train engines, %d test engines)",
+            mode,
+            n_train_engines,
+            test_mode["unit"].nunique(),
+        )
+
+        clusterer = DegradationClusterer(config, operative_axis=mode)
+        train_mode_out = clusterer.fit_transform(train_mode)
+        test_mode_out = clusterer.transform(test_mode)
+        clusterers_by_mode[mode] = clusterer.get_artifacts()
+
+        train_parts.append(train_mode_out)
+        test_parts.append(test_mode_out)
+
+    train_out = pd.concat(train_parts).sort_index()
+    test_out = pd.concat(test_parts).sort_index()
+
+    return train_out, test_out, clusterers_by_mode

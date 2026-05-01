@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import logging
 import re
 import sys
 from pathlib import Path
@@ -42,8 +43,9 @@ from data.preprocess import preprocess_test, preprocess_train
 from features.health_index import apply_dual_health_index, build_dual_health_index
 from features.variability import build_variability
 from features.velocity import build_velocity
-from model.clustering import build_clustering
-from model.risk import build_risk_score
+from model.clustering import build_clustering_per_fault_mode
+from model.fault_classifier import classify_engines, fit_fault_classifier
+from model.risk import build_risk_score_per_fault_mode
 from model.rul import build_rul_model
 
 
@@ -173,6 +175,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Execute per-dataset pipeline and model training with isolated artifacts."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     args = _parse_args()
     base_config = load_config()
 
@@ -228,8 +231,28 @@ def main() -> None:
         )
         train_vel, test_vel, _ = build_velocity(train_hi, test_hi, config)
         train_var, test_var, _ = build_variability(train_vel, test_vel, config)
-        train_cl, test_cl, cl_artifacts = build_clustering(train_var, test_var, config)
-        train_rs, test_rs, _ = build_risk_score(train_cl, test_cl, cl_artifacts)
+
+        fault_artifacts = fit_fault_classifier(train_var, config)
+        train_var = classify_engines(train_var, fault_artifacts, config)
+        test_var = classify_engines(test_var, fault_artifacts, config)
+
+        joblib.dump(fault_artifacts, hi_artifact_dir / "fault_classifier.joblib")
+
+        train_cl, test_cl, clusterers_by_mode = build_clustering_per_fault_mode(
+            train_var, test_var, config
+        )
+        train_rs, test_rs, risk_arts_by_mode = build_risk_score_per_fault_mode(
+            train_cl, test_cl, clusterers_by_mode
+        )
+
+        joblib.dump(
+            clusterers_by_mode,
+            hi_artifact_dir / "cluster_models_by_fault.joblib",
+        )
+        joblib.dump(
+            risk_arts_by_mode,
+            hi_artifact_dir / "risk_artifacts_by_fault.joblib",
+        )
 
         test_with_rul = _attach_test_rul(test_rs, test_rul_offsets)
         _, artifacts = build_rul_model(train_rs, test_with_rul, config)

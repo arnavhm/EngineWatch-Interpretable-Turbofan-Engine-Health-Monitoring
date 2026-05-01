@@ -84,6 +84,30 @@ health_index:
       FD003: 0.40
       FD004: 0.40
 
+fault_classifier:
+  late_life_window: 30
+  min_cluster_size: 10
+  silhouette_gate:
+    enabled: true
+    mode: warn # warn | block - never block during development
+    min_silhouette: 0.25
+  hpc_sensors:
+    - sensor_3
+    - sensor_4
+    - sensor_7
+    - sensor_8
+    - sensor_11
+    - sensor_13
+    - sensor_14
+    - sensor_17
+    - sensor_20
+    - sensor_21
+  fan_sensors:
+    - sensor_2
+    - sensor_9
+    - sensor_12
+    - sensor_15
+
 rolling:
   window_size: 20
   min_periods: 2
