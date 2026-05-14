@@ -162,5 +162,40 @@ Reference: Saxena et al., _Damage Propagation Modeling for Aircraft Engine Run-t
 **Iteration 1 — Complete**  
 Full FD001 pipeline, dashboard, RUL prediction, evaluation, anomaly detection.
 
-**Iteration 2 — Planned**  
-Multi-dataset (FD002–FD004 with operating condition normalisation), fault localisation, AOG cost simulator, agentic diagnostic narration.
+## Iteration 2 — AOG Cost Impact Simulator
+
+### What's New
+
+- **AOG Cost Impact Simulator** (`app/components/aog_cost_simulator.py`) —
+  translates ML risk outputs into economic maintenance decisions
+- **Decision formula:** Expected AOG cost = P(failure) × AOG cost per event.
+  Act now if preventive maintenance cost < expected AOG cost
+- **Dashboard panel** renders below RUL prediction — shows both cost scenarios,
+  urgency badge, and estimated saving in Rs Crores
+- **BTS Form 41 data pipeline** (`scripts/fetch_bts_benchmarks.py`) — fetches
+  real engine maintenance cost data from US DOT transtats database
+
+### Cost Benchmarks
+
+All figures sourced from published primary sources — see `data/sources.md`:
+
+- Go First NCLT IBC Filing, May 2023 (India narrowbody AOG: ~Rs 4.55 Cr/event)
+- IATA MCX FY2024 Public Report (global average: $1,522/flight-hour)
+- BTS Form 41 Schedule P-5.2 + T-2, FY2023 (engine cost per block-hour)
+- Eurocontrol Standard Inputs Edition 10, May 2024
+
+### Multi-Dataset Support
+
+Pipeline validated across all four CMAPSS datasets:
+
+- FD001 — 1 condition, 1 fault mode ✅ Full dashboard support
+- FD002 — 6 conditions, 1 fault mode ✅ Pipeline validated
+- FD003 — 1 condition, 2 fault modes ✅ Pipeline validated
+- FD004 — 6 conditions, 2 fault modes ✅ Pipeline validated (NASA score 107,724 → 14,655)
+
+Multi-condition dashboard visualization is in active development.
+
+### Running the AOG Simulator
+
+No retraining required. The simulator reads from pipeline outputs at runtime.
+All cost parameters configurable in `config/config.yaml → aog_simulator`.
