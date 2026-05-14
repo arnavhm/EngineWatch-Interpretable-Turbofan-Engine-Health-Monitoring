@@ -168,3 +168,24 @@ dashboard:
   rul_bands:
     healthy_min: 80
     degrading_min: 30
+
+aog_simulator:
+  # Monetary benchmarks — all in Indian Rupees
+  # Source: Go First NCLT filing 2023 ($55k/day = Rs 45.65L/day narrowbody)
+  aog_cost_per_event_rs_cr: 4.55
+  revenue_per_day_rs_lakh: 45.0
+  preventive_maintenance_cost_rs_cr: 1.20
+  expected_aog_duration_days: 3
+
+  # Passenger disruption (DGCA compensation basis)
+  disruption_cost_per_passenger_rs: 4500
+  passengers_per_flight: 180
+  flights_per_day: 6
+
+  # Sigmoid calibration — midpoint = Degrading centroid (0.66)
+  sigmoid_midpoint: 0.66
+  sigmoid_steepness: 10.0
+
+  # BTS Form 41 P-5.2 derived (fallback via IATA MCX FY2024)
+  bts_narrowbody_engine_cost_usd_per_block_hour: 180.0
+  bts_widebody_engine_cost_usd_per_block_hour: 420.0

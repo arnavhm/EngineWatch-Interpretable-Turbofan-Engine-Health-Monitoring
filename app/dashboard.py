@@ -4,6 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
+import joblib
 
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="CMAPSS Engine Health Monitor", layout="wide")
@@ -17,6 +18,39 @@ from app.components.risk_gauge import render_risk_gauge
 from app.components.cluster_timeline import render_cluster_timeline
 from app.components.rul_prediction import render_rul_prediction
 from app.components.model_evaluation import render_model_evaluation
+from app.components.aog_panel import render_aog_panel
+from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
+
+
+@st.cache_resource
+def load_artifacts(dataset_id: str) -> dict:
+    """
+    Load dataset-specific artifacts from models/{dataset_id}/ directory.
+
+    Purpose:
+        Ensure feature engineering artifacts (PCA, scalers, clustering, etc.)
+        are loaded from the correct dataset-specific subdirectory.
+        Cache key includes dataset_id so FD001 artifacts are never reused for
+        FD002, FD003, or FD004.
+
+        Note: RUL artifacts are loaded separately via load_or_rebuild_rul_artifacts()
+        due to sklearn version compatibility issues with joblib pickle.
+
+    Input:  dataset_id (FD001, FD002, FD003, or FD004)
+    Output: dict with keys for feature engineering artifacts
+    """
+    base = Path(f"models/{dataset_id}")
+    if not base.exists():
+        st.error(f"No artifacts found for {dataset_id} in models/")
+        st.stop()
+
+    return {
+        "fault_classifier": joblib.load(base / "fault_classifier.joblib"),
+        "hi_pca_by_axis": joblib.load(base / "hi_pca_by_axis.joblib"),
+        "hi_scaler_by_axis": joblib.load(base / "hi_scaler_by_axis.joblib"),
+        "cluster_models_by_fault": joblib.load(base / "cluster_models_by_fault.joblib"),
+        "risk_artifacts_by_fault": joblib.load(base / "risk_artifacts_by_fault.joblib"),
+    }
 
 
 def main() -> None:
@@ -69,9 +103,45 @@ def main() -> None:
 
     st.title("CMAPSS Engine Health Monitor")
 
-    # Run pipeline and cache data
-    with st.spinner("Loading and processing engine data..."):
-        train_rs, test_rs = load_pipeline_data()
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # DATASET SELECTOR & SESSION STATE MANAGEMENT
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Detect dataset changes and clear stale session state
+    if "last_dataset_id" not in st.session_state:
+        st.session_state["last_dataset_id"] = "FD001"
+
+    with st.sidebar:
+        st.markdown("### 📊 Dataset Selection")
+        selected_dataset = st.radio(
+            "Choose dataset:",
+            options=["FD001", "FD002", "FD003", "FD004"],
+            index=0,
+            horizontal=True,
+        )
+
+        if selected_dataset != "FD001":
+            st.info(
+                f"**{selected_dataset} selected** — "
+                f"{'6 operating conditions' if selected_dataset in ['FD002', 'FD004'] else '1 condition'}, "
+                f"{'2 fault modes (HPC + Fan)' if selected_dataset in ['FD003', 'FD004'] else '1 fault mode (HPC)'}. "
+                f"Pipeline validated: regime-normalized artifacts in models/{selected_dataset}/. "
+                f"Full dashboard visualization for multi-condition datasets is in active integration. "
+                f"Switch to FD001 for the complete diagnostic view."
+            )
+
+    # If dataset changed, clear stale values from session state
+    if selected_dataset != st.session_state["last_dataset_id"]:
+        st.session_state["last_dataset_id"] = selected_dataset
+        # Rerun to pick up new dataset throughout the dashboard
+        st.rerun()
+
+    # Run pipeline and cache data (cache key includes dataset_id)
+    with st.spinner(f"Loading and processing {selected_dataset} engine data..."):
+        train_rs, test_rs = load_pipeline_data(dataset_id=selected_dataset)
+
+    # Load dataset-specific artifacts (cache key includes dataset_id)
+    # Ensures FD001 artifacts are never reused for FD002/FD003/FD004
+    artifacts = load_artifacts(dataset_id=selected_dataset)
 
     df = test_rs.copy()
 
@@ -85,7 +155,7 @@ def main() -> None:
     # ENGINE LEVEL DETAILS
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    selected_engine_id = render_engine_selector(df)
+    selected_engine_id = render_engine_selector(df, dataset_id=selected_dataset)
     engine_df = df[df["unit"] == selected_engine_id].copy()
 
     st.divider()
@@ -98,6 +168,50 @@ def main() -> None:
     with col2:
         render_risk_gauge(engine_df)
         render_rul_prediction(engine_df)
+
+    st.divider()
+
+    # AOG panel — full width
+    from data.load import load_config
+
+    config = load_config()
+    last_row = engine_df.iloc[-1]
+
+    # Handle dual risk scores for FD003/FD004 dual-fault datasets
+    # If both risk_score_hpc and risk_score_fan exist, take minimum (more degraded axis)
+    if "risk_score_hpc" in last_row.index and "risk_score_fan" in last_row.index:
+        risk_score_hpc = float(last_row.get("risk_score_hpc", 0.0))
+        risk_score_fan = float(last_row.get("risk_score_fan", 0.0))
+        risk_score = min(risk_score_hpc, risk_score_fan)
+    else:
+        # Single risk_score column (FD001, FD002, or unified scoring)
+        risk_score = float(last_row.get("risk_score", 0.0))
+
+    risk_state = str(last_row.get("risk_state", "Healthy"))
+
+    # Compute predicted RUL using the same model as render_rul_prediction
+    FEATURE_COLUMNS = [
+        "health_index",
+        "HI_velocity",
+        "HI_variability",
+        "risk_score",
+    ]
+    try:
+        # Load RUL artifacts separately to handle sklearn version compatibility
+        rul_artifacts = load_or_rebuild_rul_artifacts(dataset_id=selected_dataset)
+        model = rul_artifacts.best_model
+        features = engine_df[FEATURE_COLUMNS].iloc[-1:].values
+        predicted_rul = max(float(model.predict(features)[0]), 0)
+    except Exception as e:
+        st.warning(f"Could not compute RUL: {e}. AOG panel will use 0.")
+        predicted_rul = 0
+
+    render_aog_panel(
+        risk_score=risk_score,
+        rul_pred=int(predicted_rul),
+        risk_state=risk_state,
+        config=config,
+    )
 
     st.divider()
     render_cluster_timeline(engine_df, selected_engine_id)

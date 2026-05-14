@@ -1,0 +1,5 @@
+aircraft_type_code,aircraft_type_name,category,engine_cost_per_block_hour_usd,year,source
+612,B737-800,narrowbody,180.0,2023,BTS_FALLBACK_2023
+634,A320,narrowbody,180.0,2023,BTS_FALLBACK_2023
+667,B777-200,widebody,420.0,2023,BTS_FALLBACK_2023
+672,B787-9,widebody,420.0,2023,BTS_FALLBACK_2023

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import streamlit as st
 import joblib
 from data.load import load_config
 
@@ -40,16 +41,29 @@ def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
     return unique_candidates
 
 
-def load_or_rebuild_rul_artifacts() -> Any:
+@st.cache_resource
+def load_or_rebuild_rul_artifacts(dataset_id: str = "FD001") -> Any:
     """
-    Load RUL artifacts from disk.
+    Load RUL artifacts from disk for the specified dataset.
 
     Purpose:
         Keep dashboard runtime read-only and fail fast when artifacts
         are missing or incompatible with the current environment.
+        Cache key includes dataset_id so FD001 artifacts are not reused for FD002, etc.
     """
     config = load_config()
+    config["dataset_id"] = dataset_id
     load_errors: list[str] = []
+
+    # Try dataset-specific artifacts first (models/FD001/, models/FD002/, etc.)
+    dataset_artifact_dir = (
+        Path(_project_root()) / "models" / dataset_id / "rul_artifacts.joblib"
+    )
+    if dataset_artifact_dir.exists():
+        try:
+            return joblib.load(dataset_artifact_dir)
+        except Exception as error:
+            load_errors.append(f"{dataset_artifact_dir}: {error}")
 
     for path in _candidate_artifact_paths(config):
         if not path.exists():

@@ -2,21 +2,25 @@ import streamlit as st
 import pandas as pd
 from app.theme import STATE_COLORS
 
-def render_engine_selector(df: pd.DataFrame) -> int:
+
+def render_engine_selector(df: pd.DataFrame, dataset_id: str = "FD001") -> int:
     with st.sidebar:
         st.markdown("### Engine Selection")
         engine_ids = sorted(df["unit"].unique())
-        selected_engine = st.selectbox("Select Engine", options=engine_ids)
-        
+        # Use dataset_id as part of key to force selectbox reset on dataset change
+        selected_engine = st.selectbox(
+            "Select Engine", options=engine_ids, key=f"engine_selector_{dataset_id}"
+        )
+
         # Get last state for selected engine
         engine_last_state = df[df["unit"] == selected_engine].iloc[-1]
         current_cycle = int(engine_last_state["cycle"])
         risk_score = engine_last_state["risk_score"]
         health_state = engine_last_state["risk_state"]
-        
+
         st.metric("Current Cycle", current_cycle)
         st.metric("Risk Score", f"{risk_score:.2f}")
-        
+
         # Badge for Health State — larger, bolder, full-width, rounded
         badge_color = STATE_COLORS.get(health_state, "gray")
         st.markdown(
@@ -37,7 +41,7 @@ def render_engine_selector(df: pd.DataFrame) -> int:
                 {health_state}
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
-        
+
         return selected_engine
