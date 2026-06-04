@@ -134,6 +134,8 @@ def compute_sensor_contributions(
     return contrib_df
 
 
+# DEPRECATED — superseded by build_dual_health_index() in Iteration 2.
+# Retained for backward compatibility. Remove in Iteration 3.
 class PCAHealthIndex:
     """
     Constructs and applies a PCA-based Health Index (HI).
@@ -152,6 +154,12 @@ class PCAHealthIndex:
         Input: config dict loaded from config/config.yaml
         Output: initialised (unfitted) PCAHealthIndex
         """
+        warnings.warn(
+            "PCAHealthIndex is a legacy single-axis class superseded by "
+            "build_dual_health_index(). It will be removed in Iteration 3.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # Read all parameters from config - never harcode here
         if "health_index" not in config:
             raise KeyError("Missing required config key: 'health_index'")
