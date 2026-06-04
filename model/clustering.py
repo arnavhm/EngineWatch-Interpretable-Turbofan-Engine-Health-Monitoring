@@ -3,7 +3,7 @@ model/clustering.py
 
 Purpose:
     Classify each engine cycle into one of three degradation states using KMeans clustering.
-    Input features: [health_index, HI_velocity, HI_variability]
+    Input features: [HI_hpc, HI_fan, HI_hpc_velocity, HI_fan_velocity]
     Output: cluster label mapped to a human-readable risk state:
             0 = Healthy, 1 = Degrading, 2 = Critical
 
@@ -15,7 +15,7 @@ Mathematical basis:
     dominates due to scale differences.
 
 Input:
-    DataFrame with columns: health_index, HI_velocity, HI_variability
+    DataFrame with columns: HI_hpc, HI_fan, HI_hpc_velocity, HI_fan_velocity
     config dict (n_clusters and random_state from config["clustering"])
 
 Output:
@@ -254,7 +254,7 @@ class DegradationClusterer:
             academically defensible.
 
         Input:  Fitted scaler and KMeans (internal state)
-        Output: DataFrame with columns [risk_state, health_index, HI_velocity, HI_variability]
+        Output: DataFrame with columns [risk_state, HI_hpc, HI_fan, HI_hpc_velocity, HI_fan_velocity, health_signal]
 
         Note: This method is only called from fit_transform() after fitting,
               so _kmeans, _scaler, and _cluster_to_label are guaranteed to be set.
@@ -306,7 +306,7 @@ class DegradationClusterer:
         df = self._drop_rows_with_nan_features(df)
         self._validate_features(df)
 
-        X = df[CLUSTER_FEATURES].values  # shape: (n_rows, 3)
+        X = df[CLUSTER_FEATURES].values  # shape: (n_rows, 4)
 
         # Fit StandardScaler on training features only
         # This ensures test data is scaled relative to training distribution
@@ -431,7 +431,7 @@ def build_clustering(
         This is the recommended interface for the full feature pipeline.
 
     Input:
-        train_df: Output of variability step (train). Must contain: health_index, HI_velocity, HI_variability
+        train_df: Output of variability step (train). Must contain: HI_hpc, HI_fan, HI_hpc_velocity, HI_fan_velocity
                   Shape: (n_train, n_cols) e.g. (20631, n_cols) for FD001
         test_df: Output of variability step (test). Must contain same features.
                  Shape: (n_test, n_cols) e.g. (13096, n_cols) for FD001

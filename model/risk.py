@@ -14,7 +14,8 @@ Mathematical basis:
     where d_min and d_max are fitted on training data only.
 
 Input shape:
-    DataFrame with columns: health_index, HI_velocity, HI_variability.
+    DataFrame with columns: HI_hpc, HI_fan (health_index (single-axis, FD001/FD002)
+    or operative-axis HI (HI_hpc or HI_fan for FD003/FD004)).
     ClusteringArtifacts fitted in model/clustering.py.
 
 Output shape:
