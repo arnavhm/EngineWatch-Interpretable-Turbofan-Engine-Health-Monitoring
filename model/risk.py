@@ -5,11 +5,13 @@ Purpose:
     Compute a continuous risk score in [0, 1] for each engine cycle.
 
 Mathematical basis:
-    For each observation x (scaled feature vector):
-        d(x) = ||x - c_critical||_2
+    Distance is computed from the operative health index axis:
+        HPC-fault engines:  d = 1 - HI_hpc
+        Fan-fault engines:  d = HI_fan  (already inverted — higher = worse)
+        Unified (default):  d = 1 - min(HI_hpc, HI_fan)
 
-    Risk score:
-        risk(x) = 1 - (d(x) - d_min) / (d_max - d_min)
+    Risk score (no further inversion — higher d already means worse health):
+        risk(x) = (d(x) - d_min) / (d_max - d_min)
 
     where d_min and d_max are fitted on training data only.
 
@@ -117,7 +119,7 @@ class RiskScorer:
 
         Assumptions:
             For HPC-fault engines: distance = 1 - HI_hpc
-            For fan-fault engines: distance = 1 - HI_fan
+            For fan-fault engines: distance = HI_fan (already inverted — higher = worse health)
             For unified mode:      distance = 1 - min(HI_hpc, HI_fan)
 
         Failure conditions:
