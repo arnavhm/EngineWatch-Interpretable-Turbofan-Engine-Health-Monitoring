@@ -7,11 +7,15 @@ import streamlit as st
 import joblib
 
 # Page config must be the first Streamlit command
-st.set_page_config(page_title="CMAPSS Engine Health Monitor", layout="wide")
+st.set_page_config(
+    page_title="EngineWatch — Interpretable Turbofan Engine Health Monitoring",
+    layout="wide",
+)
 
 from app.utils.data_loader import load_pipeline_data
 from app.components.fleet_overview import render_fleet_overview
 from app.components.engine_selector import render_engine_selector
+from app.components.anomaly_panel import render_anomaly_panel
 from app.components.hi_plot import render_hi_plot
 from app.components.dynamics_plots import render_dynamics_plots
 from app.components.risk_gauge import render_risk_gauge
@@ -19,6 +23,7 @@ from app.components.cluster_timeline import render_cluster_timeline
 from app.components.rul_prediction import render_rul_prediction
 from app.components.model_evaluation import render_model_evaluation
 from app.components.aog_panel import render_aog_panel
+from app.components.sensor_panel import render_sensor_panel
 from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
 
@@ -101,7 +106,7 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    st.title("CMAPSS Engine Health Monitor")
+    st.title("EngineWatch — Interpretable Turbofan Engine Health Monitoring")
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # DATASET SELECTOR & SESSION STATE MANAGEMENT
@@ -159,7 +164,13 @@ def main() -> None:
     engine_df = df[df["unit"] == selected_engine_id].copy()
 
     st.divider()
+    render_anomaly_panel(df, selected_engine_id=selected_engine_id)
+
+    st.divider()
     render_hi_plot(engine_df, selected_engine_id)
+
+    st.divider()
+    render_sensor_panel(engine_df, selected_engine_id)
 
     st.divider()
     col1, col2 = st.columns([2, 1])
@@ -167,7 +178,7 @@ def main() -> None:
         render_dynamics_plots(engine_df)
     with col2:
         render_risk_gauge(engine_df)
-        render_rul_prediction(engine_df)
+        render_rul_prediction(engine_df, dataset_id=selected_dataset)
 
     st.divider()
 
@@ -177,12 +188,12 @@ def main() -> None:
     config = load_config()
     last_row = engine_df.iloc[-1]
 
-    # Handle dual risk scores for FD003/FD004 dual-fault datasets
-    # If both risk_score_hpc and risk_score_fan exist, take minimum (more degraded axis)
+    # Handle dual risk scores for FD003/FD004 dual-fault datasets.
+    # Use the more degraded axis so the AOG decision stays conservative.
     if "risk_score_hpc" in last_row.index and "risk_score_fan" in last_row.index:
         risk_score_hpc = float(last_row.get("risk_score_hpc", 0.0))
         risk_score_fan = float(last_row.get("risk_score_fan", 0.0))
-        risk_score = min(risk_score_hpc, risk_score_fan)
+        risk_score = max(risk_score_hpc, risk_score_fan)
     else:
         # Single risk_score column (FD001, FD002, or unified scoring)
         risk_score = float(last_row.get("risk_score", 0.0))
@@ -196,22 +207,34 @@ def main() -> None:
         "HI_variability",
         "risk_score",
     ]
+    _rul_error: str | None = None
+    predicted_rul: int = 0
+
     try:
         # Load RUL artifacts separately to handle sklearn version compatibility
         rul_artifacts = load_or_rebuild_rul_artifacts(dataset_id=selected_dataset)
         model = rul_artifacts.best_model
         features = engine_df[FEATURE_COLUMNS].iloc[-1:].values
-        predicted_rul = max(float(model.predict(features)[0]), 0)
+        predicted_rul = max(int(float(model.predict(features)[0])), 0)
+    except KeyError as e:
+        _rul_error = (
+            f"Feature column {e} not found in pipeline output for {selected_dataset}. "
+            f"Expected columns: {FEATURE_COLUMNS}. "
+            f"Check that the RUL model artifact and pipeline output columns match."
+        )
     except Exception as e:
-        st.warning(f"Could not compute RUL: {e}. AOG panel will use 0.")
-        predicted_rul = 0
+        _rul_error = f"RUL prediction failed for {selected_dataset}: {e}"
 
-    render_aog_panel(
-        risk_score=risk_score,
-        rul_pred=int(predicted_rul),
-        risk_state=risk_state,
-        config=config,
-    )
+    if _rul_error:
+        st.markdown("### 💰 AOG Cost Impact Analysis")
+        st.error(f"⚠️ AOG panel unavailable — {_rul_error}")
+    else:
+        render_aog_panel(
+            risk_score=risk_score,
+            rul_pred=predicted_rul,
+            risk_state=risk_state,
+            config=config,
+        )
 
     st.divider()
     render_cluster_timeline(engine_df, selected_engine_id)

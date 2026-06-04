@@ -82,7 +82,7 @@ def render_model_evaluation() -> None:
     if PLOT_PATH.exists():
         st.image(
             str(PLOT_PATH),
-            use_container_width=True,
+            use_column_width=True,
             caption=(
                 "Left: Predicted vs True RUL — "
                 "Right: Prediction Error vs True RUL "
