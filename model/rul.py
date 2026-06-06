@@ -52,7 +52,11 @@ import warnings
 from pathlib import Path
 from dataclasses import dataclass
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import (
+    RandomForestRegressor,
+    HistGradientBoostingRegressor,
+)
+from sklearn.inspection import permutation_importance as sklearn_perm_importance
 from sklearn.metrics import mean_squared_error
 
 # Feature columns - must match pipeline output exactly
@@ -245,6 +249,9 @@ def _train_models(
     gradient_boosting_n_estimators = models_cfg.get(
         "gradient_boosting_n_estimators", 100
     )
+    gradient_boosting_monotonic_cst = models_cfg.get(
+        "gradient_boosting_monotonic_cst", None
+    )
 
     models = {
         "linear_regression": LinearRegression(),
@@ -252,9 +259,10 @@ def _train_models(
             n_estimators=random_forest_n_estimators,
             random_state=random_state,
         ),
-        "gradient_boosting": GradientBoostingRegressor(
-            n_estimators=gradient_boosting_n_estimators,
+        "gradient_boosting": HistGradientBoostingRegressor(
+            max_iter=gradient_boosting_n_estimators,
             random_state=random_state,
+            monotonic_cst=gradient_boosting_monotonic_cst,
         ),
     }
 
@@ -324,6 +332,74 @@ def _extract_feature_importance(models: dict) -> dict:
                 name=f"{name}_importance",
             ).sort_values(ascending=False)
     return importance
+
+
+def _compute_permutation_importance(
+    models: dict,
+    existing_importance: dict,
+    X_test: np.ndarray,
+    y_test: np.ndarray,
+    config: dict,
+) -> dict:
+    """
+    Compute permutation importance for models that do not expose feature_importances_.
+
+    Purpose:
+        HistGradientBoostingRegressor does not have a feature_importances_ attribute.
+        Permutation importance works with any sklearn estimator by measuring
+        how much performance drops when each feature is randomly shuffled.
+        Results are normalised to sum to 1.0 for consistency with tree importances.
+
+    Input:
+        models            — dict of fitted models
+        existing_importance — output of _extract_feature_importance (may contain None)
+        X_test            — test feature matrix (n_engines, 4)
+        y_test            — true RUL values (n_engines,)
+        config            — loaded config dict (random_state read from here)
+
+    Output:
+        Updated importance dict — None entries replaced with pd.Series
+
+    Assumptions:
+        X_test and y_test are the last-cycle per-engine test set (official protocol).
+        Random state from config["rul"]["random_state"].
+
+    Failure conditions:
+        Logs warning and leaves entry as None if permutation importance fails.
+    """
+    random_state = config["rul"]["random_state"]
+
+    for name, model in models.items():
+        if existing_importance.get(name) is not None:
+            continue
+
+        try:
+            perm_result = sklearn_perm_importance(
+                model,
+                X_test,
+                y_test,
+                n_repeats=10,
+                random_state=random_state,
+                scoring="neg_root_mean_squared_error",
+            )
+            raw = perm_result.importances_mean
+
+            total = raw.sum()
+            normalised = raw / total if total > 0 else raw
+
+            existing_importance[name] = pd.Series(
+                normalised,
+                index=RUL_FEATURES,
+                name=f"{name}_importance",
+            ).sort_values(ascending=False)
+
+        except Exception as exc:
+            logging.warning(
+                f"Permutation importance failed for {name}: {exc}. "
+                "Feature importance will be unavailable for this model."
+            )
+
+    return existing_importance
 
 
 def _compute_confidence_intervals(
@@ -516,6 +592,9 @@ def build_rul_model(
 
     # Extract feature importance for tree-based models
     feature_importance = _extract_feature_importance(models)
+    feature_importance = _compute_permutation_importance(
+        models, feature_importance, X_test, y_test, config
+    )
 
     # Compute Random Forest confidence intervals for display in the dashboard
     confidence_intervals = _compute_confidence_intervals(models, X_test)
