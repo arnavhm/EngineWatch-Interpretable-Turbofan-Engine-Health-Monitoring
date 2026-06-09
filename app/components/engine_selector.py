@@ -8,8 +8,23 @@ def render_engine_selector(df: pd.DataFrame, dataset_id: str = "FD001") -> int:
         st.markdown("### Engine Selection")
         engine_ids = sorted(df["unit"].unique())
         # Use dataset_id as part of key to force selectbox reset on dataset change
+        # Allow programmatic selection via session_state['select_engine_override']
+        override_key = f"select_engine_override_{dataset_id}"
+        initial_index = 0
+        if override_key in st.session_state:
+            try:
+                override_val = int(st.session_state[override_key])
+                if override_val in engine_ids:
+                    initial_index = engine_ids.index(override_val)
+            except Exception:
+                # ignore invalid override
+                pass
+
         selected_engine = st.selectbox(
-            "Select Engine", options=engine_ids, key=f"engine_selector_{dataset_id}"
+            "Select Engine",
+            options=engine_ids,
+            index=initial_index,
+            key=f"engine_selector_{dataset_id}",
         )
 
         # Get last state for selected engine

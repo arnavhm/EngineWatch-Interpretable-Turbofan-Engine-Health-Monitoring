@@ -3,6 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import numpy as np
 import streamlit as st
 import joblib
 
@@ -13,6 +14,8 @@ st.set_page_config(
 )
 
 from app.utils.data_loader import load_pipeline_data
+from data.load import load_config
+from app.utils.nl_parser import handle_nl_query
 from app.components.fleet_overview import render_fleet_overview
 from app.components.engine_selector import render_engine_selector
 from app.components.anomaly_panel import render_anomaly_panel
@@ -24,6 +27,7 @@ from app.components.rul_prediction import render_rul_prediction
 from app.components.model_evaluation import render_model_evaluation
 from app.components.aog_panel import render_aog_panel
 from app.components.sensor_panel import render_sensor_panel
+from app.components.narration_panel import render_narration_panel
 from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
 
@@ -150,6 +154,35 @@ def main() -> None:
 
     df = test_rs.copy()
 
+    # Sidebar quick natural-language lookup (allows programmatic engine selection)
+    with st.sidebar:
+        st.markdown("### 🔎 Quick Natural-Language Lookup")
+        nl_query = st.text_input(
+            "Ask (examples: 'state of engine 14 in FD001', 'eng 5-10 in FD002')",
+            key="nl_quick_query_input",
+        )
+        if st.button("Run query", key="nl_quick_query_run") and nl_query:
+            ok, msg, selection = handle_nl_query(
+                nl_query, df, st.session_state, require_confirmation=True
+            )
+            if not ok:
+                st.info(msg)
+            else:
+                # If require_confirmation was True we get a proposed selection back
+                if selection is not None:
+                    st.info(msg)
+                    st.markdown("Confirm selection:")
+                    if st.button("Confirm select", key="nl_confirm"):
+                        ds, eng = selection
+                        st.session_state["last_dataset_id"] = ds
+                        st.session_state[f"select_engine_override_{ds}"] = eng
+                        st.rerun()
+                    if st.button("Undo", key="nl_undo"):
+                        st.info("Selection canceled.")
+                else:
+                    # No explicit selection returned (edge cases) — show message
+                    st.success(msg)
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # FLEET RISK OVERVIEW
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -162,6 +195,53 @@ def main() -> None:
 
     selected_engine_id = render_engine_selector(df, dataset_id=selected_dataset)
     engine_df = df[df["unit"] == selected_engine_id].copy()
+
+    # Sidebar assistant (render after engine is selected so selected_engine_id exists)
+    with st.sidebar:
+        if st.checkbox("Show Assistant (sidebar)", key="sidebar_assistant_toggle"):
+            from app.components.narration_panel import render_narration_panel
+
+            sel_df = engine_df.copy()
+            # Compute predicted_rul_value and rul_ci quickly (re-use logic from below)
+            FEATURE_COLUMNS = [
+                "health_index",
+                "HI_velocity",
+                "HI_variability",
+                "risk_score",
+            ]
+            try:
+                rul_artifacts = load_or_rebuild_rul_artifacts(
+                    dataset_id=selected_dataset
+                )
+                model = rul_artifacts.best_model
+                features = sel_df[FEATURE_COLUMNS].iloc[-1:].values
+                predicted_rul_value = max(float(model.predict(features)[0]), 0.0)
+
+                rf_model = rul_artifacts.all_models.get("random_forest")
+                if rf_model is not None and hasattr(rf_model, "estimators_"):
+                    tree_preds = np.array(
+                        [tree.predict(features)[0] for tree in rf_model.estimators_],
+                        dtype=float,
+                    )
+                    ci_std = float(tree_preds.std())
+                    rul_ci = (
+                        max(predicted_rul_value - ci_std, 0.0),
+                        predicted_rul_value + ci_std,
+                    )
+                else:
+                    rul_ci = (predicted_rul_value, predicted_rul_value)
+            except Exception:
+                predicted_rul_value = 0.0
+                rul_ci = (0.0, 0.0)
+
+            render_narration_panel(
+                engine_df=sel_df,
+                config=load_config(),
+                predicted_rul=predicted_rul_value,
+                rul_ci=rul_ci,
+                artifacts=artifacts,
+                fleet_df=df,
+            )
 
     st.divider()
     render_anomaly_panel(df, selected_engine_id=selected_engine_id)
@@ -183,8 +263,6 @@ def main() -> None:
     st.divider()
 
     # AOG panel — full width
-    from data.load import load_config
-
     config = load_config()
     last_row = engine_df.iloc[-1]
 
@@ -209,19 +287,64 @@ def main() -> None:
     ]
     _rul_error: str | None = None
     predicted_rul: int = 0
+    predicted_rul_value: float = 0.0
+    rul_ci: tuple[float, float] = (0.0, 0.0)
 
     try:
         # Load RUL artifacts separately to handle sklearn version compatibility
         rul_artifacts = load_or_rebuild_rul_artifacts(dataset_id=selected_dataset)
         model = rul_artifacts.best_model
         features = engine_df[FEATURE_COLUMNS].iloc[-1:].values
-        predicted_rul = max(int(float(model.predict(features)[0])), 0)
+        predicted_rul_value = max(float(model.predict(features)[0]), 0.0)
+        predicted_rul = max(int(predicted_rul_value), 0)
+
+        rf_model = rul_artifacts.all_models.get("random_forest")
+        if rf_model is not None and hasattr(rf_model, "estimators_"):
+            tree_preds = np.array(
+                [tree.predict(features)[0] for tree in rf_model.estimators_],
+                dtype=float,
+            )
+            ci_std = float(tree_preds.std())
+            rul_ci = (
+                max(predicted_rul_value - ci_std, 0.0),
+                predicted_rul_value + ci_std,
+            )
+        else:
+            rul_ci = (predicted_rul_value, predicted_rul_value)
     except KeyError as e:
         _rul_error = (
             f"Feature column {e} not found in pipeline output for {selected_dataset}. "
             f"Expected columns: {FEATURE_COLUMNS}. "
             f"Check that the RUL model artifact and pipeline output columns match."
         )
+
+        # Sidebar assistant quick-query: allows natural language engine lookup
+        st.markdown("---")
+        st.markdown("### Ask Assistant (quick)")
+        nl_query = st.text_input(
+            "Quick query (e.g. 'state of engine 14 in FD001')",
+            key="sidebar_nl_query",
+            placeholder="state of engine 14 in FD001",
+        )
+        if st.button("Run query", key="sidebar_nl_query_run") and nl_query:
+            ok, msg, selection = handle_nl_query(
+                nl_query, df, st.session_state, require_confirmation=True
+            )
+            if not ok:
+                st.info(msg)
+            else:
+                if selection is not None:
+                    st.info(msg)
+                    st.markdown("Confirm selection:")
+                    if st.button("Confirm select", key="sidebar_nl_confirm"):
+                        ds, eng = selection
+                        st.session_state["last_dataset_id"] = ds
+                        st.session_state[f"select_engine_override_{ds}"] = eng
+                        st.rerun()
+                    if st.button("Undo", key="sidebar_nl_undo"):
+                        st.info("Selection canceled.")
+                else:
+                    st.success(msg)
     except Exception as e:
         _rul_error = f"RUL prediction failed for {selected_dataset}: {e}"
 
@@ -234,6 +357,15 @@ def main() -> None:
             rul_pred=predicted_rul,
             risk_state=risk_state,
             config=config,
+        )
+
+        render_narration_panel(
+            engine_df=engine_df,
+            config=config,
+            predicted_rul=predicted_rul_value,
+            rul_ci=rul_ci,
+            artifacts=artifacts,
+            fleet_df=df,
         )
 
     st.divider()

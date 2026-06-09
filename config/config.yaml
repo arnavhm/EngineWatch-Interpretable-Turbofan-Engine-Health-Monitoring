@@ -169,6 +169,7 @@ dashboard:
   rul_bands:
     healthy_min: 80
     degrading_min: 30
+  gemini_model_name: gemini-2.5-flash
 
 aog_simulator:
   # Monetary benchmarks — all in Indian Rupees
