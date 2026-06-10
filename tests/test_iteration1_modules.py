@@ -38,6 +38,8 @@ def _clustering_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
             "unit": [1, 1, 1, 2, 2, 2, 3, 3, 3],
             "cycle": [1, 2, 3, 1, 2, 3, 1, 2, 3],
             "health_index": [0.95, 0.92, 0.9, 0.55, 0.52, 0.5, 0.2, 0.18, 0.15],
+            "HI_hpc": [0.95, 0.92, 0.9, 0.55, 0.52, 0.5, 0.2, 0.18, 0.15],
+            "HI_fan": [0.95, 0.92, 0.9, 0.55, 0.52, 0.5, 0.2, 0.18, 0.15],
             "HI_velocity": [
                 -0.01,
                 -0.012,
@@ -49,7 +51,31 @@ def _clustering_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
                 -0.051,
                 -0.053,
             ],
+            "HI_hpc_velocity": [
+                -0.01,
+                -0.012,
+                -0.013,
+                -0.03,
+                -0.031,
+                -0.032,
+                -0.05,
+                -0.051,
+                -0.053,
+            ],
+            "HI_fan_velocity": [
+                -0.01,
+                -0.012,
+                -0.013,
+                -0.03,
+                -0.031,
+                -0.032,
+                -0.05,
+                -0.051,
+                -0.053,
+            ],
             "HI_variability": [0.04, 0.05, 0.05, 0.18, 0.19, 0.2, 0.35, 0.36, 0.38],
+            "HI_hpc_variability": [0.04, 0.05, 0.05, 0.18, 0.19, 0.2, 0.35, 0.36, 0.38],
+            "HI_fan_variability": [0.04, 0.05, 0.05, 0.18, 0.19, 0.2, 0.35, 0.36, 0.38],
         }
     )
     test = pd.DataFrame(
@@ -57,8 +83,14 @@ def _clustering_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
             "unit": [4, 4, 4, 5, 5, 5],
             "cycle": [1, 2, 3, 1, 2, 3],
             "health_index": [0.91, 0.88, 0.86, 0.25, 0.22, 0.2],
+            "HI_hpc": [0.91, 0.88, 0.86, 0.25, 0.22, 0.2],
+            "HI_fan": [0.91, 0.88, 0.86, 0.25, 0.22, 0.2],
             "HI_velocity": [-0.012, -0.013, -0.014, -0.048, -0.05, -0.052],
+            "HI_hpc_velocity": [-0.012, -0.013, -0.014, -0.048, -0.05, -0.052],
+            "HI_fan_velocity": [-0.012, -0.013, -0.014, -0.048, -0.05, -0.052],
             "HI_variability": [0.05, 0.06, 0.06, 0.31, 0.33, 0.35],
+            "HI_hpc_variability": [0.05, 0.06, 0.06, 0.31, 0.33, 0.35],
+            "HI_fan_variability": [0.05, 0.06, 0.06, 0.31, 0.33, 0.35],
         }
     )
     return train, test
@@ -130,7 +162,8 @@ def test_velocity_and_variability_edge_windows() -> None:
         {
             "unit": [1, 1, 1, 1, 1],
             "cycle": [1, 2, 3, 4, 5],
-            "health_index": [1.0, 0.9, 0.8, 0.7, 0.6],
+            "HI_hpc": [1.0, 0.9, 0.8, 0.7, 0.6],
+            "HI_fan": [1.0, 0.95, 0.9, 0.85, 0.8],
         }
     )
     config = {
@@ -145,6 +178,10 @@ def test_velocity_and_variability_edge_windows() -> None:
 
     assert "HI_velocity" in with_variability.columns
     assert "HI_variability" in with_variability.columns
+    assert "HI_hpc_velocity" in with_variability.columns
+    assert "HI_fan_velocity" in with_variability.columns
+    assert "HI_hpc_variability" in with_variability.columns
+    assert "HI_fan_variability" in with_variability.columns
     assert with_variability["HI_velocity"].notna().all()
     assert with_variability["HI_variability"].between(0.0, 1.0).all()
 
@@ -198,4 +235,4 @@ def test_artifact_loader_raises_when_no_artifact_available(
     )
 
     with pytest.raises(RuntimeError, match="Dashboard runtime does not retrain models"):
-        rul_artifacts_module.load_or_rebuild_rul_artifacts()
+        rul_artifacts_module.load_or_rebuild_rul_artifacts(dataset_id="nonexistent_dataset")

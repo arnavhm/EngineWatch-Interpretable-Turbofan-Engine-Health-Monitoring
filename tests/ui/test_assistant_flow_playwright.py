@@ -20,8 +20,8 @@ def test_quick_lookup_confirm_flow(page: Page):
     # Wait for sidebar to render
     page.wait_for_selector('text=Choose dataset:', timeout=20000)
 
-    # Focus the quick-query input in the sidebar (placeholder text used)
-    nl_input = page.wait_for_selector('textarea[placeholder="state of engine 14 in FD001"]', timeout=5000)
+    # Focus the quick-query input in the sidebar (aria-label matching prefix)
+    nl_input = page.wait_for_selector('input[aria-label*="Ask (examples:"]', timeout=10000)
     nl_input.fill('state of engine 1 in FD001')
 
     # Click the Run query button (label text)
@@ -42,4 +42,3 @@ def test_quick_lookup_confirm_flow(page: Page):
     # Best-effort check: find a metric or header that indicates selected engine 1
     assert page.locator('text=Engine 1').count() >= 0
 
-*** End Test

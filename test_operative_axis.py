@@ -11,9 +11,9 @@ os.environ["DATASET_NAME"] = "FD001"
 
 from data.load import load_config, load_dataset
 from data.preprocess import preprocess_train, preprocess_test
-from features.health_index import build_dual_health_index
-from features.velocity import build_velocity_features
-from features.variability import build_variability_features
+from features.health_index import build_dual_health_index, apply_dual_health_index
+from features.velocity import build_velocity
+from features.variability import build_variability
 from model.fault_classifier import fit_fault_classifier, classify_engines
 from model.clustering import build_clustering_per_fault_mode
 from model.risk import build_risk_score_per_fault_mode
@@ -33,15 +33,16 @@ print(
 )
 
 # Build HI features
-train_hi, test_hi = build_dual_health_index(train_proc, test_proc, config)
+train_hi, pca_by_axis, scaler_by_axis = build_dual_health_index(train_proc, config)
+test_hi = apply_dual_health_index(test_proc, pca_by_axis, scaler_by_axis, config)
 print(f"[{dataset}] After dual HI: Train: {train_hi.shape}, Test: {test_hi.shape}")
 
 # Build velocity
-train_vel, test_vel = build_velocity_features(train_hi, test_hi, config)
+train_vel, test_vel, _ = build_velocity(train_hi, test_hi, config)
 print(f"[{dataset}] After velocity: Train: {train_vel.shape}, Test: {test_vel.shape}")
 
 # Build variability
-train_var, test_var = build_variability_features(train_vel, test_vel, config)
+train_var, test_var, _ = build_variability(train_vel, test_vel, config)
 print(
     f"[{dataset}] After variability: Train: {train_var.shape}, Test: {test_var.shape}"
 )
