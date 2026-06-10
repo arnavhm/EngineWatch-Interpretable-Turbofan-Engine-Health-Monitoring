@@ -14,25 +14,38 @@ import streamlit as st
 from app.theme import SECTION_TITLE_CSS
 from app.utils.prompt_builder import build_gemini_chat_prompt
 from app.utils.nl_parser import handle_nl_query
+from app.utils.agentic_tools import get_agentic_tools
 from evaluation.validation import detect_anomalous_engines
 
 
-@st.cache_data(show_spinner=False)
-def fetch_gemini_narration(prompt: str, model_name: str, api_key: str) -> str:
+def fetch_gemini_narration(prompt: str, model_name: str, api_key: str, tools: list = None) -> str:
     """
-    Purpose:       Call Gemini with a cached prompt so Streamlit widget reruns do not
-                   trigger repeated API requests.
-    Input:         prompt (str), model_name (str), api_key (str).
+    Purpose:       Call Gemini to fetch narrative, optionally executing tools.
+    Input:         prompt (str), model_name (str), api_key (str), tools (list).
     Output:        str Gemini narrative text.
     Assumptions:   google-genai is installed and the API key is valid.
     Failure:       Raises RuntimeError when the SDK import fails, the API call fails,
                    or Gemini returns an empty response.
     """
     from google import genai
+    from google.genai import types
 
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(model=model_name, contents=prompt)
-    narrative = getattr(response, "text", None)
+    
+    if tools:
+        chat = client.chats.create(
+            model=model_name,
+            config=types.GenerateContentConfig(tools=tools)
+        )
+        response = chat.send_message(prompt)
+        narrative = getattr(response, "text", None)
+    else:
+        response = client.models.generate_content(
+            model=model_name, 
+            contents=prompt,
+            config=types.GenerateContentConfig()
+        )
+        narrative = getattr(response, "text", None)
 
     if narrative is None or not str(narrative).strip():
         raise RuntimeError("Gemini returned an empty narration payload.")
@@ -269,6 +282,13 @@ def render_narration_panel(
         st.warning(f"Narration unavailable: {exc}")
         return
 
+    agentic_tools = get_agentic_tools(
+        engine_context=engine_context,
+        config=config,
+        predicted_rul=predicted_rul,
+        fleet_df=fleet_df,
+    )
+
     session_key = _chat_session_key(
         config["dataset"]["name"], engine_context["unit_id"]
     )
@@ -322,6 +342,7 @@ def render_narration_panel(
                         prompt=prompt,
                         model_name=model_name,
                         api_key=api_key,
+                        tools=agentic_tools,
                     )
                 chat_state["history"].append(
                     {"role": "assistant", "content": assistant_reply}
@@ -439,6 +460,7 @@ def render_narration_panel(
                         prompt=prompt,
                         model_name=model_name,
                         api_key=api_key,
+                        tools=agentic_tools,
                     )
                 chat_state["history"].append(
                     {"role": "assistant", "content": assistant_reply}
