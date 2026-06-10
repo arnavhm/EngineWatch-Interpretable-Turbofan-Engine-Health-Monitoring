@@ -116,8 +116,14 @@ def render_rul_prediction(df: pd.DataFrame, dataset_id: str = "FD001") -> None:
     # ── Build display strings ─────────────────────────────────────────
     rmse_text = f"{rmse:.2f}" if rmse is not None else "N/A"
 
+    headline = f"{predicted_rul:.0f}"
+
     if ci_std is not None:
-        headline = f"{predicted_rul:.0f} ± {ci_std:.0f}"
+        ci_line = (
+            f'<div style="margin-top: 0.2rem; font-size: 1rem; font-weight: 400; color: #999;">'
+            f"± {ci_std:.0f} cycles"
+            f"</div>"
+        )
         interval_text = f"[{ci_lower:.0f} – {ci_upper:.0f} cycles]"
         ci_subtitle = (
             f'<div style="margin-top: 0.3rem; font-size: 0.82rem; color: #aaa;">'
@@ -126,7 +132,7 @@ def render_rul_prediction(df: pd.DataFrame, dataset_id: str = "FD001") -> None:
             f"</div>"
         )
     else:
-        headline = f"{predicted_rul:.0f}"
+        ci_line = ""
         ci_subtitle = ""
 
     # ── Card layout ───────────────────────────────────────────────────
@@ -142,6 +148,7 @@ def render_rul_prediction(df: pd.DataFrame, dataset_id: str = "FD001") -> None:
             <div style="font-size: 2.4rem; font-weight: 700; color: {rul_color}; line-height: 1.1;">
                 {headline} <span style="font-size: 1rem; font-weight: 400;">cycles</span>
             </div>
+            {ci_line}
             {ci_subtitle}
             <div style="margin-top: 0.5rem; font-size: 0.82rem; color: #888;">
                 Model&ensp;<b>{model_name}</b>&ensp;·&ensp;RMSE&ensp;<b>{rmse_text}</b>
