@@ -27,11 +27,12 @@ def _normalize_dataset_token(token: str) -> Optional[str]:
     return None
 
 
-def parse_engine_query(text: str) -> Optional[Tuple[str, Union[int, List[int]]]]:
+def parse_engine_query(text: str) -> Optional[Tuple[str, Union[int, List[int], str]]]:
     """Parse a natural-language query into (dataset_id, engine_id or [engine_ids]).
 
     Returns None when parsing fails.
     Supports ranges like "5-10" or "5 to 10" which return a list of ints.
+    Returns (dataset_id, "FLEET") if a fleet query is detected.
     """
     if not text or not text.strip():
         return None
@@ -43,6 +44,12 @@ def parse_engine_query(text: str) -> Optional[Tuple[str, Union[int, List[int]]]]
     dataset = None
     if ds_match:
         dataset = f"FD00{ds_match.group(1)}"
+
+    # look for fleet query
+    if re.search(r"\b(fleet|all\s*engines|entire\s*fleet|overview)\b", s, re.IGNORECASE):
+        if not dataset:
+            dataset = "FD001"
+        return dataset, "FLEET"
 
     # look for explicit range like '5-10' or '5 to 10'
     range_match = re.search(r"(\d{1,4})\s*(?:-|to|–)\s*(\d{1,4})", s)
@@ -96,6 +103,10 @@ def handle_nl_query(
         return False, "Could not parse query. Try 'state of engine 14 in FD001'.", None
 
     dataset_hint, engines = parsed
+    
+    if engines == "FLEET":
+        return False, f"You asked about the {dataset_hint} fleet. Please scroll to the top 'Fleet Risk Overview' section for fleet-wide insights.", None
+
     engine_ids = sorted(df["unit"].unique())
 
     # engines may be int or list

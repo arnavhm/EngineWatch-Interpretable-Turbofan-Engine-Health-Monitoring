@@ -157,31 +157,32 @@ def main() -> None:
     # Sidebar quick natural-language lookup (allows programmatic engine selection)
     with st.sidebar:
         st.markdown("### 🔎 Quick Natural-Language Lookup")
-        nl_query = st.text_input(
-            "Ask (examples: 'state of engine 14 in FD001', 'eng 5-10 in FD002')",
-            key="nl_quick_query_input",
-        )
-        if st.button("Run query", key="nl_quick_query_run") and nl_query:
+        def process_quick_query():
+            q = st.session_state.get("nl_quick_query_input", "").strip()
+            if not q:
+                return
             ok, msg, selection = handle_nl_query(
-                nl_query, df, st.session_state, require_confirmation=True
+                q, df, st.session_state, require_confirmation=False
             )
-            if not ok:
-                st.info(msg)
+            if ok:
+                st.session_state["nl_msg"] = ("success", msg)
             else:
-                # If require_confirmation was True we get a proposed selection back
-                if selection is not None:
-                    st.info(msg)
-                    st.markdown("Confirm selection:")
-                    if st.button("Confirm select", key="nl_confirm"):
-                        ds, eng = selection
-                        st.session_state["last_dataset_id"] = ds
-                        st.session_state[f"select_engine_override_{ds}"] = eng
-                        st.rerun()
-                    if st.button("Undo", key="nl_undo"):
-                        st.info("Selection canceled.")
-                else:
-                    # No explicit selection returned (edge cases) — show message
-                    st.success(msg)
+                st.session_state["nl_msg"] = ("info", msg)
+
+        with st.form("nl_quick_query_form", clear_on_submit=True):
+            st.text_input(
+                "Ask (examples: 'state of engine 14 in FD001', 'fleet query')",
+                key="nl_quick_query_input",
+            )
+            st.form_submit_button("Run query", on_click=process_quick_query)
+            
+        if "nl_msg" in st.session_state:
+            msg_type, msg_text = st.session_state["nl_msg"]
+            if msg_type == "success":
+                st.success(msg_text)
+            else:
+                st.info(msg_text)
+            del st.session_state["nl_msg"]
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # FLEET RISK OVERVIEW
@@ -195,53 +196,6 @@ def main() -> None:
 
     selected_engine_id = render_engine_selector(df, dataset_id=selected_dataset)
     engine_df = df[df["unit"] == selected_engine_id].copy()
-
-    # Sidebar assistant (render after engine is selected so selected_engine_id exists)
-    with st.sidebar:
-        if st.checkbox("Show Assistant (sidebar)", key="sidebar_assistant_toggle"):
-            from app.components.narration_panel import render_narration_panel
-
-            sel_df = engine_df.copy()
-            # Compute predicted_rul_value and rul_ci quickly (re-use logic from below)
-            FEATURE_COLUMNS = [
-                "health_index",
-                "HI_velocity",
-                "HI_variability",
-                "risk_score",
-            ]
-            try:
-                rul_artifacts = load_or_rebuild_rul_artifacts(
-                    dataset_id=selected_dataset
-                )
-                model = rul_artifacts.best_model
-                features = sel_df[FEATURE_COLUMNS].iloc[-1:].values
-                predicted_rul_value = max(float(model.predict(features)[0]), 0.0)
-
-                rf_model = rul_artifacts.all_models.get("random_forest")
-                if rf_model is not None and hasattr(rf_model, "estimators_"):
-                    tree_preds = np.array(
-                        [tree.predict(features)[0] for tree in rf_model.estimators_],
-                        dtype=float,
-                    )
-                    ci_std = float(tree_preds.std())
-                    rul_ci = (
-                        max(predicted_rul_value - ci_std, 0.0),
-                        predicted_rul_value + ci_std,
-                    )
-                else:
-                    rul_ci = (predicted_rul_value, predicted_rul_value)
-            except Exception:
-                predicted_rul_value = 0.0
-                rul_ci = (0.0, 0.0)
-
-            render_narration_panel(
-                engine_df=sel_df,
-                config=load_config(),
-                predicted_rul=predicted_rul_value,
-                rul_ci=rul_ci,
-                artifacts=artifacts,
-                fleet_df=df,
-            )
 
     st.divider()
     render_anomaly_panel(df, selected_engine_id=selected_engine_id)
@@ -318,33 +272,7 @@ def main() -> None:
             f"Check that the RUL model artifact and pipeline output columns match."
         )
 
-        # Sidebar assistant quick-query: allows natural language engine lookup
-        st.markdown("---")
-        st.markdown("### Ask Assistant (quick)")
-        nl_query = st.text_input(
-            "Quick query (e.g. 'state of engine 14 in FD001')",
-            key="sidebar_nl_query",
-            placeholder="state of engine 14 in FD001",
-        )
-        if st.button("Run query", key="sidebar_nl_query_run") and nl_query:
-            ok, msg, selection = handle_nl_query(
-                nl_query, df, st.session_state, require_confirmation=True
-            )
-            if not ok:
-                st.info(msg)
-            else:
-                if selection is not None:
-                    st.info(msg)
-                    st.markdown("Confirm selection:")
-                    if st.button("Confirm select", key="sidebar_nl_confirm"):
-                        ds, eng = selection
-                        st.session_state["last_dataset_id"] = ds
-                        st.session_state[f"select_engine_override_{ds}"] = eng
-                        st.rerun()
-                    if st.button("Undo", key="sidebar_nl_undo"):
-                        st.info("Selection canceled.")
-                else:
-                    st.success(msg)
+
     except Exception as e:
         _rul_error = f"RUL prediction failed for {selected_dataset}: {e}"
 
