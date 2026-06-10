@@ -287,6 +287,48 @@ def render_narration_panel(
     chat_state["dataset_name"] = config["dataset"]["name"]
     chat_state["unit_id"] = engine_context["unit_id"]
 
+    # Process a pending message left by the NL confirmation flow's st.rerun().
+    # Popped exactly once so it never replays on a later rerun.
+    if "narration_pending_message" in st.session_state:
+        pending_msg = st.session_state.pop("narration_pending_message")
+        pending_dataset = st.session_state.pop("narration_pending_dataset", None)
+        pending_unit = st.session_state.pop("narration_pending_unit", None)
+
+        if (
+            pending_dataset == config["dataset"]["name"]
+            and pending_unit == engine_context["unit_id"]
+        ):
+            chat_state["open"] = True
+            chat_state["history"].append({"role": "user", "content": pending_msg})
+            prompt = build_gemini_chat_prompt(
+                unit_id=engine_context["unit_id"],
+                current_cycle=engine_context["current_cycle"],
+                health_index=engine_context["health_index"],
+                velocity=engine_context["velocity"],
+                variability=engine_context["variability"],
+                risk_score=engine_context["risk_score"],
+                risk_state=engine_context["risk_state"],
+                predicted_rul=predicted_rul,
+                rul_ci=rul_ci,
+                top_sensors=engine_context["top_sensors"],
+                is_anomalous=engine_context["is_anomalous"],
+                anomaly_reason=engine_context["anomaly_reason"],
+                user_query=pending_msg,
+                chat_history=chat_state["history"],
+            )
+            try:
+                with st.spinner("Gemini is thinking..."):
+                    assistant_reply = fetch_gemini_narration(
+                        prompt=prompt,
+                        model_name=model_name,
+                        api_key=api_key,
+                    )
+                chat_state["history"].append(
+                    {"role": "assistant", "content": assistant_reply}
+                )
+            except Exception as exc:
+                st.error(f"Gemini narration unavailable: {exc}")
+
     c_left, c_right = st.columns([3, 1])
     with c_left:
         st.caption(
@@ -322,6 +364,7 @@ def render_narration_panel(
             "Ask across the fleet (e.g., 'state of engine 14 in FD001')",
             key=f"{session_key}::nl_quick",
         )
+        proposal_key = f"{session_key}::nl_proposal"
         if (
             st.button("Run fleet query", key=f"{session_key}::nl_run")
             and nl_query_local
@@ -335,19 +378,34 @@ def render_narration_panel(
             )
             if not ok:
                 st.info(msg)
+            elif selection is not None:
+                st.session_state[proposal_key] = {
+                    "query": nl_query_local,
+                    "msg": msg,
+                    "selection": selection,
+                }
             else:
-                if selection is not None:
-                    st.info(msg)
-                    st.markdown("Confirm selection:")
-                    if st.button("Confirm select", key=f"{session_key}::nl_confirm"):
-                        ds, eng = selection
-                        st.session_state["last_dataset_id"] = ds
-                        st.session_state[f"select_engine_override_{ds}"] = eng
-                        st.rerun()
-                    if st.button("Undo", key=f"{session_key}::nl_undo"):
-                        st.info("Selection canceled.")
-                else:
-                    st.success(msg)
+                st.success(msg)
+
+        # Rendered outside the "Run fleet query" branch so the Confirm/Undo
+        # buttons remain on screen (and their handlers fire) on the rerun
+        # their own click triggers.
+        if proposal_key in st.session_state:
+            proposal = st.session_state[proposal_key]
+            st.info(proposal["msg"])
+            st.markdown("Confirm selection:")
+            if st.button("Confirm select", key=f"{session_key}::nl_confirm"):
+                ds, eng = proposal["selection"]
+                st.session_state["narration_pending_message"] = proposal["query"]
+                st.session_state["narration_pending_dataset"] = ds
+                st.session_state["narration_pending_unit"] = eng
+                st.session_state["last_dataset_id"] = ds
+                st.session_state[f"select_engine_override_{ds}"] = eng
+                del st.session_state[proposal_key]
+                st.rerun()
+            if st.button("Undo", key=f"{session_key}::nl_undo"):
+                del st.session_state[proposal_key]
+                st.rerun()
 
         _render_chat_messages(chat_state["history"])
 
