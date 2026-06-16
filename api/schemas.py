@@ -42,3 +42,20 @@ class FleetSummary(BaseModel):
     mean_rul: float
     median_rul: float
     highest_risk_engine: int = Field(..., description="engine_id of max risk_score")
+
+
+class FleetHandover(BaseModel):
+    """
+    Purpose:     Daily shift-handover report combining pipeline facts with an
+                 optional LLM-authored narrative.
+    Assumptions: narrative is null when Gemini is unavailable — never an error.
+    """
+    dataset_id: str
+    facts: dict = Field(..., description="Structured fleet facts from the pipeline")
+    narrative: str | None = Field(
+        None,
+        description="Gemini-authored shift narrative; null when Gemini is unavailable",
+    )
+    narration_available: bool = Field(
+        ..., description="True when the Gemini call succeeded"
+    )

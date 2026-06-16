@@ -4,8 +4,9 @@ Hybrid Architecture: A standalone inference entry point. The dashboard's CSV-upl
 """
 
 from fastapi import FastAPI, HTTPException, Query
-from api.schemas import EnginePrediction, FleetEngine, FleetSummary
+from api.schemas import EnginePrediction, FleetEngine, FleetHandover, FleetSummary
 from api.inference import get_engine_prediction
+from model.fleet_report import build_fleet_facts, narrate_handover
 from model.predict import predict_fleet
 
 app = FastAPI(
@@ -131,4 +132,31 @@ def fleet_summary(
         mean_rul=round(float(fleet["rul_cycles"].mean()), 2),
         median_rul=round(float(fleet["rul_cycles"].median()), 2),
         highest_risk_engine=int(fleet.iloc[0]["engine_id"]),
+    )
+
+
+@app.get("/fleet/handover", response_model=FleetHandover)
+def fleet_handover(
+    dataset_id: str = Query("FD001", description="FD001 | FD002 | FD003 | FD004"),
+) -> FleetHandover:
+    """
+    Purpose:  Daily shift-handover report: structured pipeline facts plus an
+              optional Gemini-authored narrative. Facts are always returned;
+              the narrative field is null when Gemini is unavailable.
+    Failure:  422 bad dataset_id; 503 missing artifacts. Gemini failures are
+              not errors — narrative degrades to null, status stays 200.
+    """
+    if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
+        raise HTTPException(422, detail="dataset_id must be FD001–FD004")
+    try:
+        facts = build_fleet_facts(dataset_id)
+    except FileNotFoundError as e:
+        raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
+
+    narrative = narrate_handover(facts)
+    return FleetHandover(
+        dataset_id=dataset_id,
+        facts=facts,
+        narrative=narrative,
+        narration_available=narrative is not None,
     )
