@@ -13,20 +13,8 @@ from typing import Any
 
 from data.load import load_config
 from app.theme import STATE_COLORS, SECTION_TITLE_CSS
-from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
 FEATURE_COLUMNS = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
-
-
-@st.cache_resource
-def _load_rul_artifacts(dataset_id: str = "FD001") -> Any:
-    """
-    Purpose:      Load pre-trained RUL artifacts for inference. Cached per dataset.
-    Input:        dataset_id — FD001/FD002/FD003/FD004
-    Output:       RULArtifacts object
-    Failure:      RuntimeError propagated if artifacts not found on disk
-    """
-    return load_or_rebuild_rul_artifacts(dataset_id=dataset_id)
 
 
 @st.cache_data
@@ -37,30 +25,6 @@ def _load_rul_bands() -> tuple[float, float]:
     healthy_min = float(bands.get("healthy_min", 80))
     degrading_min = float(bands.get("degrading_min", 30))
     return healthy_min, degrading_min
-
-
-def _compute_rf_ci(
-    rf_model: Any,
-    features: np.ndarray,
-    point_pred: float,
-) -> tuple[float, float, float]:
-    """
-    Purpose:      Compute confidence interval for one feature vector using RF tree variance.
-                  Std is derived from individual tree predictions (model disagreement).
-                  Bounds are expressed as point_pred ± std so the headline number
-                  is always the best model (GB) prediction.
-    Input:        rf_model — fitted RandomForestRegressor from artifacts.all_models
-                  features — (1, 4) numpy array for the selected engine's last cycle
-                  point_pred — GB point prediction (float), used as interval centre
-    Output:       (ci_lower, ci_upper, ci_std) — all floats, ci_lower floored at 0
-    Assumptions:  rf_model has .estimators_ attribute (sklearn RF always does)
-    Failure:      AttributeError if rf_model is not a fitted RF — caller guards this
-    """
-    tree_preds = np.array([tree.predict(features)[0] for tree in rf_model.estimators_])
-    ci_std = float(tree_preds.std())
-    ci_lower = max(point_pred - ci_std, 0.0)
-    ci_upper = point_pred + ci_std
-    return ci_lower, ci_upper, ci_std
 
 
 def render_rul_prediction(df: pd.DataFrame, dataset_id: str = "FD001") -> None:
@@ -76,33 +40,16 @@ def render_rul_prediction(df: pd.DataFrame, dataset_id: str = "FD001") -> None:
         unsafe_allow_html=True,
     )
 
-    artifacts = _load_rul_artifacts(dataset_id=dataset_id)
-    model = artifacts.best_model
-    metrics = artifacts.evaluation_metrics
-    model_key = artifacts.best_model_name
+    from model.predict import predict_engine
 
-    # Last cycle row for this engine
-    last_row = df.iloc[[-1]]
-    features = last_row[FEATURE_COLUMNS]
-
-    predicted_rul = float(model.predict(features)[0])
-    predicted_rul = max(predicted_rul, 0.0)
-
-    # ── Confidence interval from RF tree variance ─────────────────────
-    ci_lower: float | None = None
-    ci_upper: float | None = None
-    ci_std: float | None = None
-
-    rf_model = artifacts.all_models.get("random_forest")
-    if rf_model is not None and hasattr(rf_model, "estimators_"):
-        ci_lower, ci_upper, ci_std = _compute_rf_ci(
-            rf_model, features.values, predicted_rul
-        )
-
-    # ── Readable model name and RMSE ─────────────────────────────────
-    model_name = type(model).__name__
-    model_metrics = metrics.get(model_key, {})
-    rmse = model_metrics.get("rmse") if isinstance(model_metrics, dict) else None
+    result = predict_engine(df, dataset_id=dataset_id)
+    predicted_rul = result["rul_cycles"]
+    ci_lower = result["ci_lower"]
+    ci_upper = result["ci_upper"]
+    ci_std = result.get("ci_std")
+    risk_state = result["risk_state"]
+    model_name = result.get("model_name", "Unknown")
+    rmse = result.get("rmse")
 
     # ── Colour by predicted RUL band ─────────────────────────────────
     healthy_min, degrading_min = _load_rul_bands()

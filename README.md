@@ -14,7 +14,7 @@ EngineWatch monitors turbofan engine degradation and predicts Remaining Useful L
 - **Health Variability** — instability signal preceding failure
 - **Cluster-based health state** — Healthy / Degrading / Critical
 - **Continuous Risk Score** — distance-based, normalised to [0, 1]
-- **RUL Prediction** with confidence intervals — best model RMSE 18.55 cycles
+- **RUL Prediction** with confidence intervals — best model RMSE 18.40 cycles
 - **Sensor contribution breakdown** — which sensors are driving degradation
 - **Anomaly detection** — flags engines outside the training distribution
 
@@ -36,7 +36,7 @@ KMeans Clustering (k=3, silhouette 0.40)
     ↓
 Risk Score (Euclidean distance to Critical centroid)
     ↓
-RUL Prediction (Gradient Boosting, RMSE 18.55)
+RUL Prediction (Gradient Boosting, RMSE 18.40)
     ↓
 Streamlit Dashboard
 ```
@@ -53,10 +53,10 @@ Streamlit Dashboard
 | Spearman ρ (HI monotonicity) | −0.925            |
 | Risk–RUL Pearson r           | −0.768            |
 | Best model                   | Gradient Boosting |
-| RMSE                         | 18.55 cycles      |
-| NASA score                   | 694.4             |
-| Late predictions             | 53 / 100 engines  |
-| Early predictions            | 47 / 100 engines  |
+| RMSE                         | 18.40 cycles      |
+| NASA score                   | 607.3             |
+| Late predictions             | 46 / 100 engines  |
+| Early predictions            | 54 / 100 engines  |
 
 ---
 

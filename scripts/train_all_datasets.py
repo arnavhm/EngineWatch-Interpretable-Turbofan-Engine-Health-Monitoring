@@ -230,7 +230,8 @@ def main() -> None:
             hi_artifact_dir / "hi_scaler_by_axis.joblib",
         )
         train_vel, test_vel, _ = build_velocity(train_hi, test_hi, config)
-        train_var, test_var, _ = build_variability(train_vel, test_vel, config)
+        train_var, test_var, var_artifacts = build_variability(train_vel, test_vel, config)
+        joblib.dump(var_artifacts, hi_artifact_dir / "variability_artifacts.joblib")
 
         fault_artifacts = fit_fault_classifier(train_var, config)
         train_var = classify_engines(train_var, fault_artifacts, config)

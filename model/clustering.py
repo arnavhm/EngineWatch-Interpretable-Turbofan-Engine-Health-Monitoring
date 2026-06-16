@@ -547,3 +547,38 @@ def build_clustering_per_fault_mode(
     test_out = pd.concat(test_parts).sort_index()
 
     return train_out, test_out, clusterers_by_mode
+
+
+def apply_clustering_per_fault_mode(
+    df: pd.DataFrame,
+    cluster_models_by_fault: dict,
+) -> pd.DataFrame:
+    """
+    Purpose:     Assign risk_state (Healthy/Degrading/Critical) per row using
+                 PRE-FIT clustering artifacts, routed by each row's fault_mode.
+                 Transform-only — never fits KMeans.
+    Input:       df — contains CLUSTER_FEATURES + a 'fault_mode' column
+                 cluster_models_by_fault — {mode: ClusteringArtifacts}
+    Output:      df copy with a 'risk_state' ordered categorical column added
+    Assumptions: every fault_mode value in df keys the artifact dict; unique index
+    Failure:     KeyError if a fault_mode lacks artifacts or CLUSTER_FEATURES missing
+    """
+    result = df.copy()
+    result["risk_state"] = pd.Series(index=result.index, dtype="object")
+
+    for mode, group in result.groupby("fault_mode"):
+        if mode not in cluster_models_by_fault:
+            raise KeyError(f"No clustering artifacts for fault_mode '{mode}'")
+        artifacts = cluster_models_by_fault[mode]
+        X_scaled = artifacts.scaler.transform(group[CLUSTER_FEATURES].values)
+        raw_labels = artifacts.kmeans.predict(X_scaled)
+        result.loc[group.index, "risk_state"] = [
+            artifacts.cluster_to_label[lbl] for lbl in raw_labels
+        ]
+
+    result["risk_state"] = pd.Categorical(
+        result["risk_state"],
+        categories=["Healthy", "Degrading", "Critical"],
+        ordered=True,
+    )
+    return result

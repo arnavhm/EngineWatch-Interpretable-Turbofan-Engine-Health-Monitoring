@@ -39,23 +39,21 @@ from typing import Optional
 @dataclass
 class VariabilityArtifacts:
     """
-    Container for variability feature statistics and normalisation parameters.
+    Variability normalisation parameters, keyed by health axis.
 
     Attributes:
-        window_size: Size of rolling window used for std calculation
-        min_periods: Minimum observations required for valid std
-        var_min: Minimum raw variability (training data) — used for normalisation
-        var_max: Maximum raw variability (training data) — used for normalisation
-        mean_variability: Mean normalised variability across training set
-        std_variability: Std of normalised variability across training set
+        window_size:        Rolling window size for std calculation
+        min_periods:        Minimum observations for a valid std
+        var_bounds_by_axis: {axis: (var_min, var_max)} — fit on TRAIN ONLY,
+                            applied unchanged to test/inference. One key per
+                            active axis ("hpc"; "fan" too for FD003/FD004).
+        stats_by_axis:      {axis: {"mean": float, "std": float}} — normalised
+                            train stats, inspection only (not used to transform).
     """
-
     window_size: int
     min_periods: int
-    var_min: float
-    var_max: float
-    mean_variability: float
-    std_variability: float
+    var_bounds_by_axis: dict
+    stats_by_axis: dict
 
 
 def _compute_raw_variability(
@@ -209,23 +207,27 @@ def compute_variability(
     raw_fan = _compute_raw_variability(df, "HI_fan", window, min_periods).fillna(0.0)
 
     if artifacts is None:
-        hpc_norm, var_min, var_max = _normalise_variability(raw_hpc)
-        fan_norm, _, _ = _normalise_variability(raw_fan)
+        # TRAIN MODE: fit bounds per axis on training data only
+        hpc_norm, hpc_min, hpc_max = _normalise_variability(raw_hpc)
+        fan_norm, fan_min, fan_max = _normalise_variability(raw_fan)
         artifacts = VariabilityArtifacts(
             window_size=window,
             min_periods=min_periods,
-            var_min=var_min,
-            var_max=var_max,
-            mean_variability=float(hpc_norm.mean()),
-            std_variability=float(hpc_norm.std()),
+            var_bounds_by_axis={
+                "hpc": (hpc_min, hpc_max),
+                "fan": (fan_min, fan_max),
+            },
+            stats_by_axis={
+                "hpc": {"mean": float(hpc_norm.mean()), "std": float(hpc_norm.std())},
+                "fan": {"mean": float(fan_norm.mean()), "std": float(fan_norm.std())},
+            },
         )
     else:
-        hpc_norm, _, _ = _normalise_variability(
-            raw_hpc,
-            var_min=artifacts.var_min,
-            var_max=artifacts.var_max,
-        )
-        fan_norm, _, _ = _normalise_variability(raw_fan)
+        # TEST / INFERENCE MODE: apply TRAIN bounds for EVERY axis (no re-fit)
+        hpc_min, hpc_max = artifacts.var_bounds_by_axis["hpc"]
+        fan_min, fan_max = artifacts.var_bounds_by_axis["fan"]
+        hpc_norm, _, _ = _normalise_variability(raw_hpc, var_min=hpc_min, var_max=hpc_max)
+        fan_norm, _, _ = _normalise_variability(raw_fan, var_min=fan_min, var_max=fan_max)
 
     df["HI_hpc_variability"] = hpc_norm
     df["HI_fan_variability"] = fan_norm

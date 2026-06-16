@@ -352,3 +352,29 @@ def build_risk_score_per_fault_mode(
     test_out = pd.concat(test_parts).sort_index()
 
     return train_out, test_out, risk_artifacts_by_mode
+
+
+def apply_risk_score_per_fault_mode(
+    df: pd.DataFrame,
+    cluster_models_by_fault: dict,
+    risk_artifacts_by_fault: dict,
+) -> pd.DataFrame:
+    """
+    Purpose:     Append risk_score per row using PRE-FIT risk artifacts, routed
+                 by fault_mode (via the operative axis). Transform-only.
+    Input:       df — contains CLUSTER_FEATURES + 'fault_mode' (+ 'risk_state')
+                 cluster_models_by_fault — {mode: ClusteringArtifacts}
+                 risk_artifacts_by_fault — {mode: RiskArtifacts}
+    Output:      df copy with 'risk_score' added, original row order preserved
+    Assumptions: every fault_mode in df keys BOTH dicts; df has a sortable index
+    Failure:     KeyError on a missing mode key in either dict
+    """
+    scored_parts = []
+    for mode, group in df.groupby("fault_mode"):
+        if mode not in cluster_models_by_fault or mode not in risk_artifacts_by_fault:
+            raise KeyError(f"Missing clustering/risk artifacts for fault_mode '{mode}'")
+        scorer = RiskScorer(cluster_models_by_fault[mode], operative_axis=mode)
+        scored_df, _ = scorer.transform(group, risk_artifacts_by_fault[mode])
+        scored_parts.append(scored_df)
+
+    return pd.concat(scored_parts).sort_index()

@@ -41,15 +41,14 @@ def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
     return unique_candidates
 
 
-@st.cache_resource
-def load_or_rebuild_rul_artifacts(dataset_id: str = "FD001") -> Any:
+def _load_rul_artifacts_uncached(dataset_id: str = "FD001") -> Any:
     """
-    Load RUL artifacts from disk for the specified dataset.
-
-    Purpose:
-        Keep dashboard runtime read-only and fail fast when artifacts
-        are missing or incompatible with the current environment.
-        Cache key includes dataset_id so FD001 artifacts are not reused for FD002, etc.
+    Purpose:     Pure RUL artifact load — no Streamlit, no caching.
+                 Importable from FastAPI, scripts, tests.
+    Input:       dataset_id — one of FD001–FD004
+    Output:      RULArtifacts dataclass for that dataset
+    Assumptions: Artifacts exist at the config-resolved path for dataset_id
+    Failure:     FileNotFoundError if the .joblib is missing
     """
     config = load_config()
     config["dataset_id"] = dataset_id
@@ -87,3 +86,9 @@ def load_or_rebuild_rul_artifacts(dataset_id: str = "FD001") -> Any:
         f"Searched paths: {candidate_paths}\n"
         f"Load errors: {error_details}"
     )
+
+
+@st.cache_resource
+def load_or_rebuild_rul_artifacts(dataset_id: str = "FD001") -> Any:
+    """Streamlit-cached wrapper. Dashboard entry point — behavior unchanged."""
+    return _load_rul_artifacts_uncached(dataset_id)
