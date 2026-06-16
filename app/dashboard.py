@@ -29,6 +29,7 @@ from app.components.aog_panel import render_aog_panel
 from app.components.sensor_panel import render_sensor_panel
 from app.components.narration_panel import render_narration_panel
 from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
+from app.components.csv_upload_panel import render_csv_upload_panel
 
 
 @st.cache_resource
@@ -304,6 +305,12 @@ def main() -> None:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     st.divider()
     render_model_evaluation()
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # BATCH CSV PREDICTION (true hybrid — HTTP → API)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    st.divider()
+    render_csv_upload_panel(config)
 
 
 if __name__ == "__main__":

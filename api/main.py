@@ -49,6 +49,7 @@ def predict(
 
 from fastapi import UploadFile, File
 import io
+import pandas as pd
 
 from model.predict_csv import predict_csv
 

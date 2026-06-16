@@ -171,6 +171,7 @@ rul:
     - risk_score
 
 dashboard:
+  api_base_url: "http://localhost:8000"   # overridden by API_BASE_URL env var on deploy
   rul_bands:
     healthy_min: 80
     degrading_min: 30

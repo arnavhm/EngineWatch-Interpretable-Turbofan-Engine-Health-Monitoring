@@ -59,16 +59,18 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
     scaler = joblib.load(art_dir.parent / f"scaler_{dataset_id}.joblib")
     pca_by_axis = joblib.load(art_dir / "hi_pca_by_axis.joblib")
     hi_scaler_by_axis = joblib.load(art_dir / "hi_scaler_by_axis.joblib")
+    fault_clf = joblib.load(art_dir / "fault_classifier.joblib")
     var_artifacts = joblib.load(art_dir / "variability_artifacts.joblib")
     cluster_by_fault = joblib.load(art_dir / "cluster_models_by_fault.joblib")
     risk_by_fault = joblib.load(art_dir / "risk_artifacts_by_fault.joblib")
 
     # ── transform-only chain (no fit anywhere) ──
-    proc = preprocess_test(raw_df, config, scaler)                 # regime-aware scaling
+    proc = preprocess_test(raw_df, config, scaler, persist_outputs=False)  # no disk side-effects
     hi = apply_dual_health_index(proc, pca_by_axis, hi_scaler_by_axis, config)
-    vel, _ = compute_velocity(hi, config, artifacts=None)          # stateless slopes
+    hi["health_index"] = hi["HI_hpc"]                             # legacy alias (build_health_index L663)
+    vel = compute_velocity(hi, config)                             # stateless slopes
     var, _ = compute_variability(vel, config, artifacts=var_artifacts)  # persisted bounds
-    classified = classify_engines(var, config)                     # adds fault_mode
+    classified = classify_engines(var, fault_clf, config)          # persisted classifier
     clustered = apply_clustering_per_fault_mode(classified, cluster_by_fault)
     scored = apply_risk_score_per_fault_mode(clustered, cluster_by_fault, risk_by_fault)
 
@@ -76,6 +78,8 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
     artifacts = _load_rul_artifacts_uncached(dataset_id=dataset_id)
     model = artifacts.best_model
     rf_model = artifacts.all_models.get("random_forest")
+    model_name = artifacts.best_model_name
+    rmse = float(artifacts.evaluation_metrics[model_name]["rmse"])
 
     results: list[dict] = []
     for engine_id, g in scored.groupby("unit"):
@@ -91,9 +95,9 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
         feats = last[FEATURE_COLUMNS]
         rul = max(float(model.predict(feats)[0]), 0.0)
 
-        ci_lower = ci_upper = None
+        ci_lower = ci_upper = ci_std = None
         if rf_model is not None and hasattr(rf_model, "estimators_"):
-            ci_lower, ci_upper, _ = _compute_rf_ci(rf_model, feats.values, rul)
+            ci_lower, ci_upper, ci_std = _compute_rf_ci(rf_model, feats.values, rul)
 
         results.append({
             "engine_id": int(engine_id),
@@ -104,6 +108,9 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
             "rul_cycles": rul,
             "ci_lower": ci_lower,
             "ci_upper": ci_upper,
+            "ci_std": ci_std,
+            "model_name": model_name,
+            "rmse": rmse,
             "skipped": False,
         })
 
