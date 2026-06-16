@@ -197,3 +197,6 @@ aog_simulator:
   # BTS Form 41 P-5.2 derived (fallback via IATA MCX FY2024)
   bts_narrowbody_engine_cost_usd_per_block_hour: 180.0
   bts_widebody_engine_cost_usd_per_block_hour: 420.0
+
+api:
+  enable_ci: true

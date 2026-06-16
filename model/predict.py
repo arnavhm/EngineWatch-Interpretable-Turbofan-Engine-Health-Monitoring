@@ -52,9 +52,21 @@ def predict_engine(engine_df: pd.DataFrame, dataset_id: str = "FD001") -> dict:
     predicted_rul = max(float(model.predict(features)[0]), 0.0)
 
     ci_lower = ci_upper = ci_std = None
-    rf_model = artifacts.all_models.get("random_forest")
-    if rf_model is not None and hasattr(rf_model, "estimators_"):
-        ci_lower, ci_upper, ci_std = _compute_rf_ci(rf_model, features.values, predicted_rul)
+    
+    import os
+    from data.load import load_config
+    
+    env_ci = os.environ.get("ENABLE_CI")
+    if env_ci is not None:
+        enable_ci = env_ci.lower() in ("true", "1", "yes")
+    else:
+        cfg = load_config()
+        enable_ci = cfg.get("api", {}).get("enable_ci", True)
+
+    if enable_ci:
+        rf_model = artifacts.all_models.get("random_forest")
+        if rf_model is not None and hasattr(rf_model, "estimators_"):
+            ci_lower, ci_upper, ci_std = _compute_rf_ci(rf_model, features.values, predicted_rul)
 
     return {
         "engine_id": int(last_row["unit"].iloc[0]),
