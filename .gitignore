@@ -9,3 +9,6 @@ __pycache__/
 models/
 .env
 secrets.toml
+scratch/test_fleet.py
+scratch/ablation.py
+scratch/spearman_check.py

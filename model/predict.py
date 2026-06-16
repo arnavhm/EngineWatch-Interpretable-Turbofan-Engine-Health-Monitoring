@@ -85,3 +85,42 @@ def predict_engine_by_id(engine_id: int, dataset_id: str = "FD001") -> dict:
     if engine_df.empty:
         raise ValueError(f"Engine {engine_id} not found in {dataset_id} test split")
     return predict_engine(engine_df, dataset_id)
+
+
+def predict_fleet(dataset_id: str = "FD001") -> pd.DataFrame:
+    """
+    Purpose:     Score the entire fleet in ONE pipeline pass — last cycle per engine,
+                 RUL predicted for all engines in a single model.predict() call.
+                 Single source of truth for fleet endpoints; avoids re-running the
+                 pipeline per engine.
+    Input:       dataset_id — one of FD001–FD004
+    Output:      DataFrame, one row per engine, columns:
+                 engine_id, health_index, risk_score, risk_state, rul_cycles
+                 (sorted by risk_score descending)
+    Assumptions: pipeline produces FEATURE_COLUMNS + risk_state + unit on test split
+    Failure:     FileNotFoundError if artifacts/raw data missing
+    """
+    _, test_df = load_pipeline_data_uncached(dataset_id)
+
+    # last cycle per engine (CMAPSS inference convention)
+    last = (
+        test_df.sort_values("cycle")
+        .groupby("unit")
+        .last()
+        .reset_index()
+    )
+
+    artifacts = _load_rul_artifacts_uncached(dataset_id=dataset_id)
+    model = artifacts.best_model
+
+    # single batched prediction across the whole fleet
+    preds = model.predict(last[FEATURE_COLUMNS])
+    preds = [max(float(p), 0.0) for p in preds]
+
+    return pd.DataFrame({
+        "engine_id": last["unit"].astype(int),
+        "health_index": last["health_index"].astype(float),
+        "risk_score": last["risk_score"].astype(float),
+        "risk_state": last["risk_state"].astype(str),
+        "rul_cycles": preds,
+    }).sort_values("risk_score", ascending=False).reset_index(drop=True)

@@ -4,8 +4,9 @@ Hybrid Architecture: A standalone inference entry point. The dashboard's CSV-upl
 """
 
 from fastapi import FastAPI, HTTPException, Query
-from api.schemas import EnginePrediction
+from api.schemas import EnginePrediction, FleetEngine, FleetSummary
 from api.inference import get_engine_prediction
+from model.predict import predict_fleet
 
 app = FastAPI(
     title="EngineWatch Inference API",
@@ -86,3 +87,48 @@ async def predict_csv_endpoint(
         "predictions": preds,
         "skipped": skipped,
     }
+
+
+@app.get("/fleet/top-risk", response_model=list[FleetEngine])
+def fleet_top_risk(
+    dataset_id: str = Query("FD001", description="FD001 | FD002 | FD003 | FD004"),
+    n: int = Query(5, ge=1, le=100, description="number of top-risk engines"),
+) -> list[FleetEngine]:
+    """
+    Purpose:  The N highest-risk engines in the fleet, risk_score descending.
+    Failure:  422 bad dataset_id; 503 missing artifacts.
+    """
+    if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
+        raise HTTPException(422, detail="dataset_id must be FD001–FD004")
+    try:
+        fleet = predict_fleet(dataset_id)
+    except FileNotFoundError as e:
+        raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
+    return fleet.head(n).to_dict(orient="records")
+
+
+@app.get("/fleet/summary", response_model=FleetSummary)
+def fleet_summary(
+    dataset_id: str = Query("FD001", description="FD001 | FD002 | FD003 | FD004"),
+) -> FleetSummary:
+    """
+    Purpose:  Fleet-level health aggregates for the dataset.
+    Failure:  422 bad dataset_id; 503 missing artifacts.
+    """
+    if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
+        raise HTTPException(422, detail="dataset_id must be FD001–FD004")
+    try:
+        fleet = predict_fleet(dataset_id)
+    except FileNotFoundError as e:
+        raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
+
+    counts = fleet["risk_state"].value_counts().to_dict()
+    return FleetSummary(
+        dataset_id=dataset_id,
+        n_engines=len(fleet),
+        state_counts={k: int(v) for k, v in counts.items()},
+        n_critical=int(counts.get("Critical", 0)),
+        mean_rul=round(float(fleet["rul_cycles"].mean()), 2),
+        median_rul=round(float(fleet["rul_cycles"].median()), 2),
+        highest_risk_engine=int(fleet.iloc[0]["engine_id"]),
+    )

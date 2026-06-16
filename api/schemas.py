@@ -23,3 +23,22 @@ class EnginePrediction(BaseModel):
     ci_std: float | None = Field(None, description="RF tree-variance std (cycles)")
     model_name: str = Field(..., description="Model that produced the point prediction")
     rmse: float = Field(..., description="That model's validation RMSE")
+
+
+class FleetEngine(BaseModel):
+    """One engine's risk summary in a fleet listing."""
+    engine_id: int
+    risk_score: float = Field(..., ge=0.0, le=1.0)
+    risk_state: str
+    rul_cycles: float
+
+
+class FleetSummary(BaseModel):
+    """Fleet-level aggregate health snapshot."""
+    dataset_id: str
+    n_engines: int
+    state_counts: dict = Field(..., description="{Healthy, Degrading, Critical: count}")
+    n_critical: int
+    mean_rul: float
+    median_rul: float
+    highest_risk_engine: int = Field(..., description="engine_id of max risk_score")

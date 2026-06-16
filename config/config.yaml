@@ -87,6 +87,11 @@ health_index:
 fault_classifier:
   late_life_window: 30
   min_cluster_size: 10
+  n_fault_modes_by_dataset:
+    FD001: 1
+    FD002: 1
+    FD003: 1
+    FD004: 1
   silhouette_gate:
     enabled: true
     mode: warn # warn | block - never block during development

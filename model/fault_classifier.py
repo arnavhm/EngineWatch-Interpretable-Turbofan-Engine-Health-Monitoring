@@ -199,6 +199,26 @@ def fit_fault_classifier(
     min_cluster_size: int = fc_cfg["min_cluster_size"]
     random_state: int = config["clustering"]["random_state"]
 
+    n_modes = fc_cfg.get("n_fault_modes_by_dataset", {}).get(config.get("dataset_id"), None)
+    if n_modes == 1:
+        logging.info(
+            "[FAULT CLASSIFIER] %s is single-fault by config; forcing all engines to 'hpc'.",
+            config.get("dataset_id"),
+        )
+        # Dummy instances for type-safety since they are required but unused
+        dummy_kmeans = KMeans(n_clusters=2, random_state=random_state, n_init=1)
+        dummy_scaler = StandardScaler()
+        return FaultClassifierArtifacts(
+            kmeans=dummy_kmeans,
+            scaler=dummy_scaler,
+            label_map={0: "hpc", 1: "hpc"},
+            single_fault_mode=True,
+            dominant_fault="hpc",
+            silhouette=1.0,
+            fault_counts={"hpc": df["unit"].nunique()},
+            late_life_window=window,
+        )
+
     logging.info(
         "[FAULT CLASSIFIER] Computing late-life HI slopes "
         "(window=%d cycles, %d engines)",

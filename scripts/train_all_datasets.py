@@ -134,6 +134,7 @@ def _dataset_config(base_config: dict, dataset_id: str) -> dict:
     """
     config = copy.deepcopy(base_config)
 
+    config["dataset_id"] = dataset_id
     config["dataset"]["name"] = dataset_id
     config["dataset"]["train_file"] = f"train_{dataset_id}.txt"
     config["dataset"]["test_file"] = f"test_{dataset_id}.txt"

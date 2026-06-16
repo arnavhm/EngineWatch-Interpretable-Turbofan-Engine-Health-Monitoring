@@ -124,3 +124,11 @@ def test_scaler_not_fit_on_test(fd001_pipeline_output):
         # Test mean will not be exactly 0 — if it is, scaler was refit on test (bug)
         assert not (test_means.abs() < 1e-10).all(), \
             "All test sensor means are 0.0 — scaler may have been refit on test data"
+
+
+def test_risk_score_state_agree(fd001_pipeline_output):
+    """Risk score and state must agree in direction — guards the fan-inversion bug."""
+    _, test_rs = fd001_pipeline_output
+    last = test_rs.sort_values("cycle").groupby("unit").last()
+    contradictions = last[(last.risk_score > 0.7) & (last.risk_state == "Healthy")]
+    assert len(contradictions) == 0, f"{len(contradictions)} engines high-risk but Healthy"
