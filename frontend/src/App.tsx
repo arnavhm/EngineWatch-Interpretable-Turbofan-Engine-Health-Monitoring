@@ -16,7 +16,7 @@ function Panel({ title, children, className = '' }: { title: string, children?: 
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center text-muted text-sm font-mono border border-dashed border-border rounded-lg bg-panel2 bg-opacity-50 min-h-[150px]">
-          [ Empty ]
+          Coming in Phase 2
         </div>
       )}
     </div>
@@ -28,7 +28,7 @@ function App() {
   const [selectedEngine, setSelectedEngine] = useState<number>(34);
 
   return (
-    <div className="min-h-screen bg-bg text-text font-sans flex flex-col">
+    <div className="min-h-screen bg-bg text-text font-sans flex flex-col overflow-x-hidden">
       <TopBar />
       
       <main className="flex-1 w-full max-w-[1180px] mx-auto px-4 sm:px-6">
@@ -41,21 +41,21 @@ function App() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
-          <Panel title="Engine Status" className="md:col-span-2 lg:col-span-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
+          <Panel title="Engine Status" className="sm:col-span-2 lg:col-span-3">
             <MetricStrip engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
-          <Panel title="Risk Dial">
+          <Panel title="Risk Dial" className="col-span-1">
             <RiskDial engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
-          <Panel title="Fleet Summary" className="md:col-span-2 lg:col-span-2">
+          <Panel title="Fleet Summary" className="sm:col-span-1 lg:col-span-2">
             <FleetSummary datasetId={selectedDataset} onSelectEngine={setSelectedEngine} />
           </Panel>
-          <Panel title="Top Risk">
+          <Panel title="Top Risk" className="sm:col-span-2 lg:col-span-3">
             <TopRiskTable datasetId={selectedDataset} selectedEngine={selectedEngine} onSelectEngine={setSelectedEngine} />
           </Panel>
-          <Panel title="Trajectory" className="md:col-span-2 lg:col-span-3" />
-          <Panel title="Sensors" className="md:col-span-2 lg:col-span-3" />
+          <Panel title="Trajectory" className="sm:col-span-2 lg:col-span-3" />
+          <Panel title="Sensors" className="sm:col-span-2 lg:col-span-3" />
         </div>
       </main>
     </div>
