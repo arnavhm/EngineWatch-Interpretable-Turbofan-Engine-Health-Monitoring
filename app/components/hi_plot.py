@@ -1,7 +1,8 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import STATE_COLORS, TOKENS, apply_plotly_theme
 
 def render_hi_plot(df: pd.DataFrame, unit_id: int):
     st.markdown(
@@ -21,7 +22,7 @@ def render_hi_plot(df: pd.DataFrame, unit_id: int):
         y=df_plot["health_index"],
         mode="lines",
         name="Health Index",
-        line=dict(color="#3498db", width=2),
+        line=dict(color=TOKENS["accent"], width=2),
         hovertemplate="Cycle: %{x}<br>Health Index: %{y:.3f}<extra></extra>"
     ))
     
@@ -31,7 +32,7 @@ def render_hi_plot(df: pd.DataFrame, unit_id: int):
         y=df_plot["hi_rolling_mean"],
         mode="lines",
         name="10-Cycle Rolling Mean",
-        line=dict(color="#2980b9", width=2, dash="dash"),
+        line=dict(color=TOKENS["muted"], width=2, dash="dash"),
         hoverinfo="skip"
     ))
     
@@ -52,4 +53,5 @@ def render_hi_plot(df: pd.DataFrame, unit_id: int):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
+    fig = apply_plotly_theme(fig)
     st.plotly_chart(fig, use_container_width=True)

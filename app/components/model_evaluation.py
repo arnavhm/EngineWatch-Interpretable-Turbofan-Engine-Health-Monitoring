@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 from typing import Any
-from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import STATE_COLORS
 from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent

@@ -12,7 +12,8 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import STATE_COLORS, state_chip, DATASET_LABELS
 
 # ── Minimum cycles required by the pipeline for velocity/variability ────
 _MIN_CYCLES_NOTE = 20
@@ -67,6 +68,7 @@ def render_csv_upload_panel(config: dict) -> None:
             index=0,
             help="Selects which persisted transformers the API uses for scoring.",
             key="csv_upload_dataset",
+            format_func=lambda d: DATASET_LABELS.get(d, d),
         )
 
     with col_btn:
@@ -128,9 +130,8 @@ def render_csv_upload_panel(config: dict) -> None:
             state_counts[s] = state_counts.get(s, 0) + 1
         cols = st.columns(len(state_counts))
         for col, (state, count) in zip(cols, state_counts.items()):
-            color = STATE_COLORS.get(state, "#888")
             col.markdown(
-                f"<span style='color:{color}; font-weight:700'>{state}</span>: {count}",
+                f"{state_chip(state)} : **{count}**",
                 unsafe_allow_html=True,
             )
 

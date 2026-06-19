@@ -1,7 +1,8 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import STATE_COLORS, apply_plotly_theme
 
 def render_cluster_timeline(df: pd.DataFrame, unit_id: int):
     st.markdown(
@@ -34,4 +35,5 @@ def render_cluster_timeline(df: pd.DataFrame, unit_id: int):
         yaxis=dict(type='category', categoryorder='array', categoryarray=category_order)
     )
     
+    fig = apply_plotly_theme(fig)
     st.plotly_chart(fig, use_container_width=True)

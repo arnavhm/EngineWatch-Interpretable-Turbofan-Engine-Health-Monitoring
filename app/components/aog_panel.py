@@ -9,12 +9,13 @@ Usage:
 
 import streamlit as st
 from app.components.aog_cost_simulator import compute_maintenance_decision
+from app.utils.theme import TOKENS
 
 _URGENCY_COLOURS: dict[str, str] = {
-    "CRITICAL": "#FF4B4B",
-    "HIGH": "#FF8C00",
-    "MODERATE": "#FFD700",
-    "LOW": "#21C354",
+    "CRITICAL": TOKENS["critical"],
+    "HIGH": TOKENS["degrading"],
+    "MODERATE": TOKENS["degrading"],  # Fallback to caution
+    "LOW": TOKENS["healthy"],
 }
 
 _URGENCY_ICONS: dict[str, str] = {
@@ -57,7 +58,7 @@ def render_aog_panel(
         return
 
     # --- Decision summary row (tight horizontal layout) ---
-    colour = _URGENCY_COLOURS.get(d["urgency_level"], "#888")
+    colour = _URGENCY_COLOURS.get(d["urgency_level"], TOKENS["muted"])
     icon = _URGENCY_ICONS.get(d["urgency_level"], "")
 
     c1, c2, c3, c4 = st.columns([1.2, 1.8, 1.8, 1.8])

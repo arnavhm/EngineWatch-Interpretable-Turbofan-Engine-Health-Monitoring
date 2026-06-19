@@ -6,12 +6,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 import streamlit as st
 import joblib
+from typing import Optional
 
 # Page config must be the first Streamlit command
 st.set_page_config(
     page_title="EngineWatch — Interpretable Turbofan Engine Health Monitoring",
     layout="wide",
 )
+
+from app.utils.theme import (
+    inject_css, apply_plotly_theme, risk_dial, state_chip, STATE_COLORS,
+    DATASET_LABELS
+)
+inject_css()
 
 from app.utils.data_loader import load_pipeline_data
 from data.load import load_config
@@ -126,7 +133,8 @@ def main() -> None:
             "Choose dataset:",
             options=["FD001", "FD002", "FD003", "FD004"],
             index=0,
-            horizontal=True,
+            horizontal=False,
+            format_func=lambda d: DATASET_LABELS.get(d, d),
         )
 
         if selected_dataset != "FD001":
@@ -240,7 +248,7 @@ def main() -> None:
         "HI_variability",
         "risk_score",
     ]
-    _rul_error: str | None = None
+    _rul_error: Optional[str] = None
     predicted_rul: int = 0
     predicted_rul_value: float = 0.0
     rul_ci: tuple[float, float] = (0.0, 0.0)

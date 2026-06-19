@@ -1,4 +1,4 @@
-from typing import Callable, Any
+from typing import Callable, Any, Optional
 import pandas as pd
 import json
 import copy
@@ -9,7 +9,7 @@ def get_agentic_tools(
     engine_context: dict[str, Any],
     config: dict[str, Any],
     predicted_rul: float,
-    fleet_df: pd.DataFrame | None,
+    fleet_df: Optional[pd.DataFrame],
 ) -> list[Callable]:
     """
     Returns a list of callable tools bound to the current engine and fleet context.

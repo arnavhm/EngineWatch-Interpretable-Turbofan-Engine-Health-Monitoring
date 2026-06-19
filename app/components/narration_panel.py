@@ -5,7 +5,7 @@ Agentic AI diagnostic narration panel powered by Gemini.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -92,7 +92,7 @@ def _build_engine_context(
     current_row: pd.Series,
     config: dict[str, Any],
     artifacts: dict[str, Any],
-    fleet_df: pd.DataFrame | None,
+    fleet_df: Optional[pd.DataFrame],
 ) -> dict[str, Any]:
     """
     Purpose:       Extract the current engine context used by the assistant.
@@ -203,7 +203,7 @@ def render_narration_panel(
     predicted_rul: float,
     rul_ci: tuple[float, float],
     artifacts: dict[str, Any],
-    fleet_df: pd.DataFrame | None = None,
+    fleet_df: Optional[pd.DataFrame] = None,
 ) -> None:
     """
     Purpose:       Build the Gemini prompt from the current engine snapshot, fetch the

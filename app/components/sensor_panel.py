@@ -21,6 +21,7 @@ import plotly.graph_objects as go
 
 from app.utils.sensor_catalog import SENSOR_CATALOG
 from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import TOKENS, apply_plotly_theme, rgba
 
 
 def render_sensor_panel(engine_df: pd.DataFrame, unit_id: int) -> None:
@@ -107,13 +108,13 @@ def _render_single_sensor(
     fig.add_vrect(
         x0=late_life_start,
         x1=max_cycle,
-        fillcolor="rgba(231, 76, 60, 0.08)",
+        fillcolor=rgba(TOKENS["critical"], 0.08),
         layer="below",
         line_width=0,
         annotation_text="Late-life",
         annotation_position="top left",
         annotation_font_size=10,
-        annotation_font_color="#e74c3c",
+        annotation_font_color=TOKENS["critical"],
     )
 
     # Sensor signal
@@ -124,7 +125,7 @@ def _render_single_sensor(
             y=engine_df[sensor],
             mode="lines",
             name=meta["symbol"],
-            line=dict(color="#3498db", width=1.5, dash=line_dash),
+            line=dict(color=TOKENS["accent"], width=1.5, dash=line_dash),
             hovertemplate=(
                 f"Cycle: %{{x}}<br>{meta['symbol']}: %{{y:.3f}}{units_suffix}"
                 "<extra></extra>"
@@ -139,7 +140,7 @@ def _render_single_sensor(
             y=rolling_mean,
             mode="lines",
             name="10-cycle mean",
-            line=dict(color="#7f8c8d", width=1.2, dash="dot"),
+            line=dict(color=TOKENS["muted"], width=1.2, dash="dot"),
             hoverinfo="skip",
         )
     )
@@ -158,6 +159,7 @@ def _render_single_sensor(
         showlegend=False,
     )
 
+    fig = apply_plotly_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
     _render_sensor_reference(sensor, meta)
 

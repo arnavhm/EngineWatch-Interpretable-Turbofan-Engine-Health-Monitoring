@@ -19,6 +19,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 import warnings
+from typing import Optional, Union
 
 
 class RegimeScaler:
@@ -56,9 +57,9 @@ class RegimeScaler:
         self._n_regimes = n_regimes
         self._setting_cols = setting_cols
         self._random_state = random_state
-        self._kmeans: KMeans | None = None
+        self._kmeans: Optional[KMeans] = None
         self._scalers: dict[int, StandardScaler] = {}
-        self._sensor_cols: list[str] | None = None
+        self._sensor_cols: Optional[list[str]] = None
         self._silhouette_min_threshold = float(silhouette_min_threshold)
         self._enforce_silhouette_gate = bool(enforce_silhouette_gate)
 
@@ -226,7 +227,7 @@ class RegimeScaler:
 
         return scaled_df
 
-    def transform(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
+    def transform(self, X: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
         """
         Purpose    : Sklearn-compatible transform interface for n_regimes=1 only.
                      Satisfies the duck-type contract expected by apply_scaler(),

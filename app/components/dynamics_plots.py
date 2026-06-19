@@ -1,7 +1,8 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import STATE_COLORS, TOKENS, apply_plotly_theme
 
 def render_dynamics_plots(df: pd.DataFrame):
     col1, col2 = st.columns(2)
@@ -19,7 +20,7 @@ def render_dynamics_plots(df: pd.DataFrame):
             y=df["HI_velocity"],
             mode="lines",
             name="Velocity",
-            line=dict(color="#3498db", width=2),
+            line=dict(color=TOKENS["accent"], width=2),
             hovertemplate="Cycle: %{x}<br>Velocity: %{y:.4f}<extra></extra>"
         ))
         
@@ -27,7 +28,7 @@ def render_dynamics_plots(df: pd.DataFrame):
         fig_vel.add_hline(
             y=0,
             line_dash="dot",
-            line_color="black",
+            line_color=TOKENS["faint"],
         )
         
         # Add shaded area for negative velocity
@@ -55,6 +56,7 @@ def render_dynamics_plots(df: pd.DataFrame):
             yaxis_title="Velocity",
             hovermode="x unified",
         )
+        fig_vel = apply_plotly_theme(fig_vel)
         st.plotly_chart(fig_vel, use_container_width=True)
         
     with col2:
@@ -84,4 +86,5 @@ def render_dynamics_plots(df: pd.DataFrame):
             yaxis_title="Variability",
             hovermode="x unified",
         )
+        fig_var = apply_plotly_theme(fig_var)
         st.plotly_chart(fig_var, use_container_width=True)

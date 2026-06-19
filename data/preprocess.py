@@ -9,7 +9,7 @@ Assumptions:
 """
 
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Union
 
 import joblib
 import pandas as pd
@@ -18,7 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from data.regime import RegimeScaler, fit_regime_scaler
 
 
-ScalerType = StandardScaler | RegimeScaler
+ScalerType = Union[StandardScaler, RegimeScaler]
 
 
 def _validate_preprocess_config(config: dict) -> None:

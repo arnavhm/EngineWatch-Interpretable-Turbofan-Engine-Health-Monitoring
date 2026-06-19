@@ -2,7 +2,8 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import STATE_COLORS, apply_plotly_theme
 
 def render_fleet_overview(df: pd.DataFrame):
     st.markdown(
@@ -30,6 +31,7 @@ def render_fleet_overview(df: pd.DataFrame):
             labels={"unit": "Engine ID", "risk_score": "Risk Score", "risk_state": "Risk State"}
         )
         fig_bar.update_layout(xaxis_title="Engine ID", yaxis_title="Risk Score")
+        fig_bar = apply_plotly_theme(fig_bar)
         st.plotly_chart(fig_bar, use_container_width=True)
         
     with tab2:
@@ -76,4 +78,5 @@ def render_fleet_overview(df: pd.DataFrame):
             xaxis_title="Cycle",
             yaxis_title="Engine ID",
         )
+        fig_heatmap = apply_plotly_theme(fig_heatmap)
         st.plotly_chart(fig_heatmap, use_container_width=True)

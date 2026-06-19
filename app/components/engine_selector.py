@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from app.theme import STATE_COLORS
+from app.utils.theme import state_chip
 
 
 def render_engine_selector(df: pd.DataFrame, dataset_id: str = "FD001") -> int:
@@ -37,27 +37,7 @@ def render_engine_selector(df: pd.DataFrame, dataset_id: str = "FD001") -> int:
         st.metric("Current Cycle", current_cycle)
         st.metric("Risk Score", f"{risk_score:.2f}")
 
-        # Badge for Health State — larger, bolder, full-width, rounded
-        badge_color = STATE_COLORS.get(health_state, "gray")
-        st.markdown(
-            f"""
-            <div style="
-                background-color: {badge_color};
-                color: white;
-                padding: 0.75rem 1rem;
-                border-radius: 10px;
-                text-align: center;
-                font-weight: 800;
-                font-size: 1.25rem;
-                letter-spacing: 0.03em;
-                margin-top: 1rem;
-                width: 100%;
-                box-sizing: border-box;
-            ">
-                {health_state}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        # Badge for Health State
+        st.markdown(state_chip(health_state), unsafe_allow_html=True)
 
         return selected_engine

@@ -14,9 +14,11 @@ Usage:
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from typing import Optional
 
 from evaluation.validation import detect_anomalous_engines
-from app.theme import STATE_COLORS, SECTION_TITLE_CSS
+from app.theme import SECTION_TITLE_CSS
+from app.utils.theme import STATE_COLORS, TOKENS, apply_plotly_theme
 
 
 @st.cache_data
@@ -33,7 +35,7 @@ def _run_anomaly_detection(df: pd.DataFrame) -> pd.DataFrame:
 
 def render_anomaly_panel(
     df: pd.DataFrame,
-    selected_engine_id: int | None = None,
+    selected_engine_id: Optional[int] = None,
 ) -> None:
     """
     Purpose:      Render Mahalanobis anomaly scatter for the full engine fleet.
@@ -99,7 +101,7 @@ def render_anomaly_panel(
                 mode="markers",
                 name=state,
                 marker=dict(
-                    color=STATE_COLORS.get(state, "#888"),
+                    color=STATE_COLORS.get(state, TOKENS["muted"]),
                     size=8,
                     opacity=0.75,
                 ),
@@ -123,14 +125,14 @@ def render_anomaly_panel(
                 mode="markers+text",
                 name="Anomalous",
                 marker=dict(
-                    color="#FF4B4B",
+                    color=TOKENS["critical"],
                     size=14,
                     symbol="diamond",
-                    line=dict(color="white", width=1.5),
+                    line=dict(color=TOKENS["text"], width=1.5),
                 ),
                 text=anomaly_plot_df["unit"].astype(str),
                 textposition="top center",
-                textfont=dict(size=10, color="#FF4B4B"),
+                textfont=dict(size=10, color=TOKENS["critical"]),
                 customdata=anomaly_plot_df[["unit", "mahalanobis_distance"]].values,
                 hovertemplate=(
                     "⚠️ Engine %{customdata[0]} — ANOMALOUS<br>"
@@ -155,7 +157,7 @@ def render_anomaly_panel(
                     marker=dict(
                         color="rgba(0,0,0,0)",
                         size=18,
-                        line=dict(color="white", width=2.5),
+                        line=dict(color=TOKENS["text"], width=2.5),
                     ),
                     hoverinfo="skip",
                 )
@@ -175,6 +177,7 @@ def render_anomaly_panel(
         margin=dict(t=40, b=40, l=40, r=40),
     )
 
+    fig = apply_plotly_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
 
     # ── Flagged engine details ────────────────────────────────────────

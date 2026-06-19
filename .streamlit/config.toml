@@ -1,0 +1,17 @@
+# EngineWatch — Mission Control dark theme (Streamlit native base)
+# Place at: <repo-root>/.streamlit/config.toml
+# Custom fonts (IBM Plex) and component styling are layered on top via
+# app/utils/theme.py -> inject_css(). This file only sets the base palette
+# so Streamlit's own chrome (widgets, sidebar, inputs) is dark from first paint.
+
+[theme]
+base = "dark"
+primaryColor = "#2DD4A7"            # EICAS nominal green — accents, focus, active widgets
+backgroundColor = "#0B1014"          # cockpit charcoal (cool, not pure black)
+secondaryBackgroundColor = "#121A21" # panels / sidebar / cards
+textColor = "#E6EDF3"                # off-white primary text
+font = "sans serif"                  # IBM Plex is applied via CSS (config only takes keywords)
+
+[server]
+# Dashboard talks to its own API over HTTP (hybrid arch). Harmless if unused.
+headless = false
