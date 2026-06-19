@@ -14,6 +14,8 @@ _predict_cache: dict[str, dict] = {}
 _fleet_summary_cache: dict[str, dict] = {}
 _fleet_top_risk_cache: dict[str, list] = {}
 _trajectory_cache: dict[str, dict] = {}
+_sensor_cache: dict[str, dict] = {}
+_anomaly_cache: dict[str, list] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,7 +38,16 @@ async def lifespan(app: FastAPI):
             f"FD001:{eid}": traj for eid, traj in trajectory_cache.items()
         })
         
-        print("[startup] All caches loaded from fleet_cache_FD001.pkl and trajectory_cache_FD001.pkl — zero compute at runtime")
+        sensor_cache_path = Path(__file__).resolve().parent.parent / "models" / f"sensor_cache_{dataset_id}.pkl"
+        sensor_cache = joblib.load(sensor_cache_path)
+        _sensor_cache.update({
+            f"FD001:{eid}": data for eid, data in sensor_cache.items()
+        })
+        
+        anomaly_cache_path = Path(__file__).resolve().parent.parent / "models" / f"anomaly_cache_{dataset_id}.pkl"
+        _anomaly_cache["FD001"] = joblib.load(anomaly_cache_path)
+        
+        print("[startup] All caches loaded — zero compute at runtime")
     except Exception as e:
         print(f"[startup] Pre-warm failed: {e}")
     yield
@@ -76,6 +87,19 @@ async def get_trajectory(engine_id: int, dataset_id: str = "FD001"):
     key = f"{dataset_id}:{engine_id}"
     if key in _trajectory_cache:
         return _trajectory_cache[key]
+    raise HTTPException(status_code=404, detail="Engine not found")
+
+@app.get("/sensors")
+async def get_sensors(engine_id: int, dataset_id: str = "FD001"):
+    key = f"{dataset_id}:{engine_id}"
+    if key in _sensor_cache:
+        return _sensor_cache[key]
+    raise HTTPException(status_code=404, detail="Engine not found")
+
+@app.get("/anomaly")
+async def get_anomaly(dataset_id: str = "FD001"):
+    if dataset_id in _anomaly_cache:
+        return _anomaly_cache[dataset_id]
     raise HTTPException(status_code=404, detail="Engine not found")
 
 @app.get("/predict", response_model=EnginePrediction)

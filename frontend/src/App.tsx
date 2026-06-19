@@ -5,6 +5,10 @@ import MetricStrip from './components/MetricStrip';
 import RiskDial from './components/RiskDial';
 import FleetSummary from './components/FleetSummary';
 import TopRiskTable from './components/TopRiskTable';
+import TrajectoryPanel from './components/TrajectoryPanel';
+import SensorPanel from './components/SensorPanel';
+import AnomalyScatter from './components/AnomalyScatter';
+import CsvUpload from './components/CsvUpload';
 import { usePredict } from './hooks/usePredict';
 
 function Panel({ title, children, className = '' }: { title: string, children?: React.ReactNode, className?: string }) {
@@ -56,8 +60,18 @@ function App() {
           <Panel title="Top Risk" className="sm:col-span-2 lg:col-span-3">
             <TopRiskTable datasetId={selectedDataset} selectedEngine={selectedEngine} onSelectEngine={setSelectedEngine} />
           </Panel>
-          <Panel title="Trajectory" className="sm:col-span-2 lg:col-span-3" />
-          <Panel title="Sensors" className="sm:col-span-2 lg:col-span-3" />
+          <Panel title="HEALTH TRAJECTORY" className="sm:col-span-2 lg:col-span-3">
+            <TrajectoryPanel engineId={selectedEngine} datasetId={selectedDataset} />
+          </Panel>
+          <Panel title="SENSORS" className="sm:col-span-2 lg:col-span-3">
+            <SensorPanel engineId={selectedEngine} datasetId={selectedDataset} />
+          </Panel>
+          <Panel title="FLEET ANOMALY" className="sm:col-span-2 lg:col-span-3">
+            <AnomalyScatter datasetId={selectedDataset} />
+          </Panel>
+          <Panel title="CSV BATCH PREDICT" className="sm:col-span-2 lg:col-span-3">
+            <CsvUpload />
+          </Panel>
         </div>
       </main>
     </div>

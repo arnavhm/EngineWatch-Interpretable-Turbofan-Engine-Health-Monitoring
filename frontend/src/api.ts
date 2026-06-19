@@ -1,4 +1,4 @@
-import type { PredictResponse, FleetSummary, TopRiskItem } from './types';
+import type { PredictResponse, FleetSummary, TopRiskItem, TrajectoryResponse, SensorResponse, AnomalyPoint } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE;
 
@@ -51,4 +51,19 @@ export async function getFleetSummary(datasetId: string): Promise<FleetSummary> 
 export async function getTopRisk(datasetId: string): Promise<TopRiskItem[]> {
   const params = new URLSearchParams({ dataset_id: datasetId });
   return fetchJson<TopRiskItem[]>(`/fleet/top-risk?${params.toString()}`);
+}
+
+export async function getTrajectory(engineId: number, datasetId: string): Promise<TrajectoryResponse> {
+  const params = new URLSearchParams({ engine_id: String(engineId), dataset_id: datasetId });
+  return fetchJson<TrajectoryResponse>(`/trajectory?${params.toString()}`);
+}
+
+export async function getSensors(engineId: number, datasetId: string): Promise<SensorResponse> {
+  const params = new URLSearchParams({ engine_id: String(engineId), dataset_id: datasetId });
+  return fetchJson<SensorResponse>(`/sensors?${params.toString()}`);
+}
+
+export async function getAnomaly(datasetId: string): Promise<AnomalyPoint[]> {
+  const params = new URLSearchParams({ dataset_id: datasetId });
+  return fetchJson<AnomalyPoint[]>(`/anomaly?${params.toString()}`);
 }

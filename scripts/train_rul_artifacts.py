@@ -150,6 +150,52 @@ def main() -> None:
     traj_cache_path = root_dir / "models" / "trajectory_cache_FD001.pkl"
     joblib.dump(trajectory_cache, traj_cache_path)
     print(f"[artifacts] trajectory_cache_FD001.pkl saved ({len(trajectory_cache)} engines)")
+    
+    # 6. Build sensor_cache for all 100 FD001 engines
+    # Map sensor_N columns to Saxena 2008 Table 2 physical names
+    SENSOR_NAME_MAP = {
+        "sensor_2": "T24", "sensor_3": "T30", "sensor_4": "T50",
+        "sensor_7": "P30", "sensor_8": "Nf", "sensor_9": "Nc",
+        "sensor_11": "Ps30", "sensor_12": "phi", "sensor_13": "NRf",
+        "sensor_14": "NRc", "sensor_15": "BPR", "sensor_17": "htBleed",
+        "sensor_20": "W31", "sensor_21": "W32"
+    }
+    sensor_cols = [c for c in test_rs.columns if c.startswith("sensor_")]
+    sensor_cache = {}
+    for eid, group in test_rs.groupby("unit"):
+        eid = int(eid)
+        group = group.sort_values("cycle")
+        sensors = {}
+        for col in sensor_cols:
+            physical = SENSOR_NAME_MAP.get(col, col)
+            sensors[physical] = group[col].astype(float).tolist()
+        sensor_cache[eid] = {
+            "engine_id": eid,
+            "dataset_id": dataset_id,
+            "cycles": group["cycle"].astype(int).tolist(),
+            "sensors": sensors
+        }
+    sensor_cache_path = root_dir / "models" / "sensor_cache_FD001.pkl"
+    joblib.dump(sensor_cache, sensor_cache_path)
+    print(f"[artifacts] sensor_cache_FD001.pkl saved ({len(sensor_cache)} engines)")
+    
+    # 7. Build anomaly_cache for all 100 FD001 engines
+    from evaluation.validation import detect_anomalous_engines
+    anomaly_df = detect_anomalous_engines(test_rs)
+    anomaly_cache = []
+    for _, arow in anomaly_df.iterrows():
+        eid = int(arow["unit"])
+        engine_last = last[last["unit"] == eid].iloc[0]
+        anomaly_cache.append({
+            "engine_id": eid,
+            "health_index": float(engine_last["health_index"]),
+            "velocity": float(engine_last["HI_velocity"]),
+            "is_anomaly": bool(arow["is_anomaly"]),
+            "risk_state": str(engine_last["risk_state"])
+        })
+    anomaly_cache_path = root_dir / "models" / "anomaly_cache_FD001.pkl"
+    joblib.dump(anomaly_cache, anomaly_cache_path)
+    print(f"[artifacts] anomaly_cache_FD001.pkl saved ({len(anomaly_cache)} engines)")
 
 
 if __name__ == "__main__":
