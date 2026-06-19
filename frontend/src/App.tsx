@@ -3,6 +3,7 @@ import TopBar from './components/TopBar';
 import Selector from './components/Selector';
 import MetricStrip from './components/MetricStrip';
 import RiskDial from './components/RiskDial';
+import FleetSummary from './components/FleetSummary';
 
 function Panel({ title, children, className = '' }: { title: string, children?: React.ReactNode, className?: string }) {
   return (
@@ -46,7 +47,9 @@ function App() {
           <Panel title="Risk Dial">
             <RiskDial engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
-          <Panel title="Fleet Summary" />
+          <Panel title="Fleet Summary" className="md:col-span-2 lg:col-span-2">
+            <FleetSummary datasetId={selectedDataset} onSelectEngine={setSelectedEngine} />
+          </Panel>
           <Panel title="Top Risk" />
           <Panel title="Trajectory" className="md:col-span-2 lg:col-span-3" />
           <Panel title="Sensors" className="md:col-span-2 lg:col-span-3" />
