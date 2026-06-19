@@ -47,29 +47,29 @@ function App() {
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
-          <Panel title="Engine Status" className="sm:col-span-2 lg:col-span-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
+          <Panel title="Engine Status" className="md:col-span-2 lg:col-span-3">
             <MetricStrip data={engineData} loading={engineLoading} error={engineError} />
           </Panel>
           <Panel title="Risk Dial" className="col-span-1">
             <RiskDial data={engineData} loading={engineLoading} />
           </Panel>
-          <Panel title="Fleet Summary" className="sm:col-span-1 lg:col-span-2">
+          <Panel title="Fleet Summary" className="md:col-span-1 lg:col-span-2">
             <FleetSummary datasetId={selectedDataset} onSelectEngine={setSelectedEngine} />
           </Panel>
-          <Panel title="Top Risk" className="sm:col-span-2 lg:col-span-3">
+          <Panel title="Top Risk" className="md:col-span-2 lg:col-span-3">
             <TopRiskTable datasetId={selectedDataset} selectedEngine={selectedEngine} onSelectEngine={setSelectedEngine} />
           </Panel>
-          <Panel title="HEALTH TRAJECTORY" className="sm:col-span-2 lg:col-span-3">
+          <Panel title="HEALTH TRAJECTORY" className="md:col-span-2 lg:col-span-3">
             <TrajectoryPanel engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
-          <Panel title="SENSORS" className="sm:col-span-2 lg:col-span-3">
+          <Panel title="SENSORS" className="md:col-span-2 lg:col-span-3">
             <SensorPanel engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
-          <Panel title="FLEET ANOMALY" className="sm:col-span-2 lg:col-span-3">
+          <Panel title="FLEET ANOMALY" className="md:col-span-2 lg:col-span-3">
             <AnomalyScatter datasetId={selectedDataset} />
           </Panel>
-          <Panel title="CSV BATCH PREDICT" className="sm:col-span-2 lg:col-span-3">
+          <Panel title="CSV BATCH PREDICT" className="md:col-span-2 lg:col-span-3">
             <CsvUpload />
           </Panel>
         </div>
