@@ -131,6 +131,25 @@ def main() -> None:
     
     # 4. Print: [artifacts] fleet_cache_FD001.pkl saved (100 engines)
     print(f"[artifacts] fleet_cache_FD001.pkl saved ({len(per_engine)} engines)")
+    
+    # 5. Build trajectory_cache for all 100 FD001 engines
+    trajectory_cache = {}
+    for engine_id, group in test_rs.groupby("unit"):
+        engine_id = int(engine_id)
+        group = group.sort_values("cycle")
+        trajectory_cache[engine_id] = {
+            "engine_id": engine_id,
+            "dataset_id": dataset_id,
+            "cycles": group["cycle"].astype(int).tolist(),
+            "health_index": group["health_index"].astype(float).tolist(),
+            "velocity": group["HI_velocity"].astype(float).tolist(),
+            "variability": group["HI_variability"].astype(float).tolist()
+        }
+        
+    # Save trajectory_cache
+    traj_cache_path = root_dir / "models" / "trajectory_cache_FD001.pkl"
+    joblib.dump(trajectory_cache, traj_cache_path)
+    print(f"[artifacts] trajectory_cache_FD001.pkl saved ({len(trajectory_cache)} engines)")
 
 
 if __name__ == "__main__":

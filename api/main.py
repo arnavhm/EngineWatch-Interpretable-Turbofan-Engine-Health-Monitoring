@@ -13,6 +13,7 @@ from pathlib import Path
 _predict_cache: dict[str, dict] = {}
 _fleet_summary_cache: dict[str, dict] = {}
 _fleet_top_risk_cache: dict[str, list] = {}
+_trajectory_cache: dict[str, dict] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,7 +29,14 @@ async def lifespan(app: FastAPI):
         })
         _fleet_summary_cache["FD001"] = fleet_cache["fleet_summary"]
         _fleet_top_risk_cache["FD001"] = fleet_cache["top_risk"]
-        print("[startup] All caches loaded from fleet_cache_FD001.pkl — zero compute at runtime")
+        
+        traj_cache_path = Path(__file__).resolve().parent.parent / "models" / f"trajectory_cache_{dataset_id}.pkl"
+        trajectory_cache = joblib.load(traj_cache_path)
+        _trajectory_cache.update({
+            f"FD001:{eid}": traj for eid, traj in trajectory_cache.items()
+        })
+        
+        print("[startup] All caches loaded from fleet_cache_FD001.pkl and trajectory_cache_FD001.pkl — zero compute at runtime")
     except Exception as e:
         print(f"[startup] Pre-warm failed: {e}")
     yield
@@ -62,6 +70,13 @@ def health() -> dict:
     """
     return {"status": "ok", "service": "enginewatch-inference-api"}
 
+
+@app.get("/trajectory")
+async def get_trajectory(engine_id: int, dataset_id: str = "FD001"):
+    key = f"{dataset_id}:{engine_id}"
+    if key in _trajectory_cache:
+        return _trajectory_cache[key]
+    raise HTTPException(status_code=404, detail="Engine not found")
 
 @app.get("/predict", response_model=EnginePrediction)
 async def predict(
