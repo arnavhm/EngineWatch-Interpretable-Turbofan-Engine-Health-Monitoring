@@ -3,18 +3,37 @@ import type { PredictResponse, FleetSummary, TopRiskItem } from './types';
 const BASE = import.meta.env.VITE_API_BASE;
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+  try {
+    const url = `${BASE}${path}`;
+    console.log(`Fetching: ${url}`);
+    
+    const res = await fetch(url);
+    
+    if (!res || typeof res.ok === 'undefined') {
+      throw new Error('Invalid fetch response object');
+    }
+    
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`API error: ${res.status} ${res.statusText} - ${text}`);
+    }
+    
+    return await res.json();
+  } catch (error) {
+    console.error('fetchJson error:', error);
+    throw error;
   }
-  return res.json();
 }
 
 export async function checkHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/health`);
-    return res.ok;
-  } catch {
+    const url = `${BASE}/health`;
+    console.log(`Health check: ${url}`);
+    const res = await fetch(url);
+    console.log('Health response:', res);
+    return res?.ok ?? false;
+  } catch (error) {
+    console.error('Health check failed:', error);
     return false;
   }
 }
