@@ -50,6 +50,88 @@ def main() -> None:
     print(f"Best model: {artifacts.best_model_name}")
     print(f"Prediction rows: {len(predictions_df)}")
 
+    import joblib
+    import os
+    from model.predict import FEATURE_COLUMNS, _compute_rf_ci
+    import numpy as np
+
+    dataset_id = "FD001"
+    
+    # 1. Run the full inference pipeline for all 100 FD001 test engines using the already-trained artifacts
+    last = test_rs.sort_values("cycle").groupby("unit").last().reset_index()
+    preds = artifacts.best_model.predict(last[FEATURE_COLUMNS])
+    preds = [max(float(p), 0.0) for p in preds]
+    
+    rf_model = artifacts.all_models.get("random_forest")
+    env_ci = os.environ.get("ENABLE_CI")
+    if env_ci is not None:
+        enable_ci = env_ci.lower() in ("true", "1", "yes")
+    else:
+        enable_ci = config.get("api", {}).get("enable_ci", True)
+    compute_ci = enable_ci and rf_model is not None and hasattr(rf_model, "estimators_")
+    
+    per_engine = {}
+    engine_dicts_list = []
+    
+    for i, row in last.iterrows():
+        engine_id = int(row["unit"])
+        features = row[FEATURE_COLUMNS]
+        predicted_rul = preds[i]
+        
+        ci_lower = ci_upper = ci_std = None
+        if compute_ci:
+            ci_lower, ci_upper, ci_std = _compute_rf_ci(rf_model, features.values.reshape(1, -1), predicted_rul)
+            
+        pred_dict = {
+            "engine_id": engine_id,
+            "dataset_id": dataset_id,
+            "health_index": float(row["health_index"]),
+            "risk_score": float(row["risk_score"]),
+            "risk_state": str(row["risk_state"]),
+            "rul_cycles": predicted_rul,
+            "ci_lower": ci_lower,
+            "ci_upper": ci_upper,
+            "ci_std": ci_std,
+            "model_name": artifacts.best_model_name,
+            "rmse": float(artifacts.evaluation_metrics[artifacts.best_model_name]["rmse"])
+        }
+        per_engine[engine_id] = pred_dict
+        engine_dicts_list.append(pred_dict)
+        
+    engine_dicts_list.sort(key=lambda x: x["risk_score"], reverse=True)
+    
+    counts = last["risk_state"].value_counts().to_dict()
+    fleet_summary = {
+        "dataset_id": dataset_id,
+        "n_engines": len(per_engine),
+        "state_counts": {
+            "Healthy": int(counts.get("Healthy", 0)),
+            "Degrading": int(counts.get("Degrading", 0)),
+            "Critical": int(counts.get("Critical", 0))
+        },
+        "n_critical": int(counts.get("Critical", 0)),
+        "mean_rul": round(float(np.mean(preds)), 2),
+        "median_rul": round(float(np.median(preds)), 2),
+        "highest_risk_engine": engine_dicts_list[0]["engine_id"]
+    }
+    
+    top_risk = engine_dicts_list[:5]
+    
+    # 2. Build a fleet_cache dict
+    fleet_cache = {
+        "per_engine": per_engine,
+        "fleet_summary": fleet_summary,
+        "top_risk": top_risk
+    }
+    
+    # 3. Save: joblib.dump(fleet_cache, "models/fleet_cache_FD001.pkl")
+    root_dir = Path(__file__).resolve().parent.parent
+    cache_path = root_dir / "models" / "fleet_cache_FD001.pkl"
+    joblib.dump(fleet_cache, cache_path)
+    
+    # 4. Print: [artifacts] fleet_cache_FD001.pkl saved (100 engines)
+    print(f"[artifacts] fleet_cache_FD001.pkl saved ({len(per_engine)} engines)")
+
 
 if __name__ == "__main__":
     main()
