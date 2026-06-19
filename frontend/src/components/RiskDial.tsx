@@ -1,5 +1,5 @@
 import { usePredict } from '../hooks/usePredict';
-import { STATE_TEXT, STATE_VAR } from '../stateColors';
+import { STATE_TEXT } from '../stateColors';
 
 interface RiskDialProps {
   engineId: number;
