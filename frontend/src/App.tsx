@@ -5,6 +5,7 @@ import MetricStrip from './components/MetricStrip';
 import RiskDial from './components/RiskDial';
 import FleetSummary from './components/FleetSummary';
 import TopRiskTable from './components/TopRiskTable';
+import { usePredict } from './hooks/usePredict';
 
 function Panel({ title, children, className = '' }: { title: string, children?: React.ReactNode, className?: string }) {
   return (
@@ -26,6 +27,7 @@ function Panel({ title, children, className = '' }: { title: string, children?: 
 function App() {
   const [selectedDataset, setSelectedDataset] = useState<string>("FD001");
   const [selectedEngine, setSelectedEngine] = useState<number>(34);
+  const { data: engineData, loading: engineLoading, error: engineError } = usePredict(selectedEngine, selectedDataset);
 
   return (
     <div className="min-h-screen bg-bg text-text font-sans flex flex-col overflow-x-hidden">
@@ -43,10 +45,10 @@ function App() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
           <Panel title="Engine Status" className="sm:col-span-2 lg:col-span-3">
-            <MetricStrip engineId={selectedEngine} datasetId={selectedDataset} />
+            <MetricStrip data={engineData} loading={engineLoading} error={engineError} />
           </Panel>
           <Panel title="Risk Dial" className="col-span-1">
-            <RiskDial engineId={selectedEngine} datasetId={selectedDataset} />
+            <RiskDial data={engineData} loading={engineLoading} />
           </Panel>
           <Panel title="Fleet Summary" className="sm:col-span-1 lg:col-span-2">
             <FleetSummary datasetId={selectedDataset} onSelectEngine={setSelectedEngine} />

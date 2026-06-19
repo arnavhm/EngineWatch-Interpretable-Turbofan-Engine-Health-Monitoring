@@ -8,6 +8,13 @@ from features.variability import build_variability
 from model.clustering import build_clustering
 from model.risk import build_risk_score
 
+_dataset_cache: dict[str, tuple] = {}
+
+def get_cached_dataset(dataset_id: str, config: dict) -> tuple:
+    """Return cached (train_df, test_df, rul_df). Load once, reuse forever."""
+    if dataset_id not in _dataset_cache:
+        _dataset_cache[dataset_id] = load_dataset(config)
+    return _dataset_cache[dataset_id]
 
 def build_pipeline_data(
     persist_outputs: bool = False,
@@ -58,7 +65,7 @@ def load_pipeline_data_uncached(
     from model.risk import build_risk_score_per_fault_mode
 
     # Load with updated config
-    train_raw, test_raw, _ = load_dataset(config)
+    train_raw, test_raw, _ = get_cached_dataset(dataset_id, config)
     train_proc, scaler, _ = preprocess_train(train_raw, config, persist_outputs=False)
     test_proc = preprocess_test(test_raw, config, scaler, persist_outputs=False)
     

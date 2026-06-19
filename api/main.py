@@ -8,6 +8,10 @@ from api.schemas import EnginePrediction, FleetEngine, FleetHandover, FleetSumma
 from api.inference import get_engine_prediction
 from model.fleet_report import build_fleet_facts, narrate_handover
 from model.predict import predict_fleet
+import asyncio
+
+_compute_semaphore = asyncio.Semaphore(1)
+_fleet_summary_cache: dict[str, dict] = {}
 
 app = FastAPI(
     title="EngineWatch Inference API",
@@ -39,7 +43,7 @@ def health() -> dict:
 
 
 @app.get("/predict", response_model=EnginePrediction)
-def predict(
+async def predict(
     engine_id: int = Query(..., description="CMAPSS engine unit number", ge=1),
     dataset_id: str = Query("FD001", description="FD001 | FD002 | FD003 | FD004"),
 ) -> EnginePrediction:
@@ -54,7 +58,8 @@ def predict(
     if dataset_id not in valid:
         raise HTTPException(status_code=422, detail=f"dataset_id must be one of {sorted(valid)}")
     try:
-        return get_engine_prediction(engine_id, dataset_id)
+        async with _compute_semaphore:
+            return get_engine_prediction(engine_id, dataset_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except FileNotFoundError as e:
@@ -105,7 +110,7 @@ async def predict_csv_endpoint(
 
 
 @app.get("/fleet/top-risk", response_model=list[FleetEngine])
-def fleet_top_risk(
+async def fleet_top_risk(
     dataset_id: str = Query("FD001", description="FD001 | FD002 | FD003 | FD004"),
     n: int = Query(5, ge=1, le=100, description="number of top-risk engines"),
 ) -> list[FleetEngine]:
@@ -116,29 +121,34 @@ def fleet_top_risk(
     if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
         raise HTTPException(422, detail="dataset_id must be FD001–FD004")
     try:
-        fleet = predict_fleet(dataset_id)
+        async with _compute_semaphore:
+            fleet = predict_fleet(dataset_id)
     except FileNotFoundError as e:
         raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
     return fleet.head(n).to_dict(orient="records")
 
 
 @app.get("/fleet/summary", response_model=FleetSummary)
-def fleet_summary(
+async def fleet_summary(
     dataset_id: str = Query("FD001", description="FD001 | FD002 | FD003 | FD004"),
 ) -> FleetSummary:
     """
     Purpose:  Fleet-level health aggregates for the dataset.
     Failure:  422 bad dataset_id; 503 missing artifacts.
     """
+    if dataset_id in _fleet_summary_cache:
+        return _fleet_summary_cache[dataset_id]
+
     if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
         raise HTTPException(422, detail="dataset_id must be FD001–FD004")
     try:
-        fleet = predict_fleet(dataset_id)
+        async with _compute_semaphore:
+            fleet = predict_fleet(dataset_id)
     except FileNotFoundError as e:
         raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
 
     counts = fleet["risk_state"].value_counts().to_dict()
-    return FleetSummary(
+    result = FleetSummary(
         dataset_id=dataset_id,
         n_engines=len(fleet),
         state_counts={k: int(v) for k, v in counts.items()},
@@ -147,6 +157,8 @@ def fleet_summary(
         median_rul=round(float(fleet["rul_cycles"].median()), 2),
         highest_risk_engine=int(fleet.iloc[0]["engine_id"]),
     )
+    _fleet_summary_cache[dataset_id] = result
+    return result
 
 
 @app.get("/fleet/handover", response_model=FleetHandover)

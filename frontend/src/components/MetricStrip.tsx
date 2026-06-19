@@ -1,14 +1,14 @@
-import { usePredict } from '../hooks/usePredict';
 import { STATE_TEXT, STATE_VAR } from '../stateColors';
 import PanelState from './PanelState';
+import type { PredictResponse } from '../types';
 
 interface MetricStripProps {
-  engineId: number;
-  datasetId: string;
+  data: PredictResponse | null;
+  loading: boolean;
+  error: string | null;
 }
 
-export default function MetricStrip({ engineId, datasetId }: MetricStripProps) {
-  const { data, loading, error } = usePredict(engineId, datasetId);
+export default function MetricStrip({ data, loading, error }: MetricStripProps) {
 
   return (
     <PanelState loading={loading || !data} error={error}>

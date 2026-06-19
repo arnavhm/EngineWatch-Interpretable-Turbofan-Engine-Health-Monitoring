@@ -1,17 +1,15 @@
-import { usePredict } from '../hooks/usePredict';
 import { STATE_TEXT } from '../stateColors';
 import PanelState from './PanelState';
+import type { PredictResponse } from '../types';
 
 interface RiskDialProps {
-  engineId: number;
-  datasetId: string;
+  data: PredictResponse | null;
+  loading: boolean;
 }
 
-export default function RiskDial({ engineId, datasetId }: RiskDialProps) {
-  const { data, loading, error } = usePredict(engineId, datasetId);
-
+export default function RiskDial({ data, loading }: RiskDialProps) {
   return (
-    <PanelState loading={loading || !data} error={error}>
+    <PanelState loading={loading || !data} error={null}>
       {data && (() => {
         const { risk_score, risk_state } = data;
         const colorClass = STATE_TEXT[risk_state];
