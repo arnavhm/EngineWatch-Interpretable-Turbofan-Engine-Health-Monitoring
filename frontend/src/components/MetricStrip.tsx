@@ -9,6 +9,10 @@ interface MetricStripProps {
 export default function MetricStrip({ engineId, datasetId }: MetricStripProps) {
   const { data, loading, error } = usePredict(engineId, datasetId);
 
+  if (data) {
+    console.log("RAW DATA:", data);
+  }
+
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center border border-dashed border-border rounded-lg bg-panel2 bg-opacity-50">
