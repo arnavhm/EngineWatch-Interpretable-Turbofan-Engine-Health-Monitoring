@@ -5,18 +5,39 @@ Hybrid Architecture: A standalone inference entry point. The dashboard's CSV-upl
 
 from fastapi import FastAPI, HTTPException, Query
 from api.schemas import EnginePrediction, FleetEngine, FleetHandover, FleetSummary
-from api.inference import get_engine_prediction
 from model.fleet_report import build_fleet_facts, narrate_handover
-from model.predict import predict_fleet
-import asyncio
+from contextlib import asynccontextmanager
+import joblib
+from pathlib import Path
 
-_compute_semaphore = asyncio.Semaphore(1)
+_predict_cache: dict[str, dict] = {}
 _fleet_summary_cache: dict[str, dict] = {}
+_fleet_top_risk_cache: dict[str, list] = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        dataset_id = "FD001"
+        
+        cache_path = Path(__file__).resolve().parent.parent / "models" / f"fleet_cache_{dataset_id}.pkl"
+        fleet_cache = joblib.load(cache_path)
+        
+        _predict_cache.update({
+            f"FD001:{eid}": result
+            for eid, result in fleet_cache["per_engine"].items()
+        })
+        _fleet_summary_cache["FD001"] = fleet_cache["fleet_summary"]
+        _fleet_top_risk_cache["FD001"] = fleet_cache["top_risk"]
+        print("[startup] All caches loaded from fleet_cache_FD001.pkl — zero compute at runtime")
+    except Exception as e:
+        print(f"[startup] Pre-warm failed: {e}")
+    yield
 
 app = FastAPI(
     title="EngineWatch Inference API",
     description="Interpretable RUL prediction for NASA C-MAPSS turbofan engines",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,16 +75,11 @@ async def predict(
     Failure:  404 if engine not found in the dataset's test split;
               503 if artifacts or raw data are unavailable.
     """
-    valid = {"FD001", "FD002", "FD003", "FD004"}
-    if dataset_id not in valid:
-        raise HTTPException(status_code=422, detail=f"dataset_id must be one of {sorted(valid)}")
-    try:
-        async with _compute_semaphore:
-            return get_engine_prediction(engine_id, dataset_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=503, detail=f"Artifacts/data unavailable: {e}")
+    cache_key = f"{dataset_id}:{engine_id}"
+    if cache_key in _predict_cache:
+        return _predict_cache[cache_key]
+
+    raise HTTPException(status_code=404, detail="Engine not found")
 
 from fastapi import UploadFile, File
 import io
@@ -118,14 +134,10 @@ async def fleet_top_risk(
     Purpose:  The N highest-risk engines in the fleet, risk_score descending.
     Failure:  422 bad dataset_id; 503 missing artifacts.
     """
-    if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
-        raise HTTPException(422, detail="dataset_id must be FD001–FD004")
-    try:
-        async with _compute_semaphore:
-            fleet = predict_fleet(dataset_id)
-    except FileNotFoundError as e:
-        raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
-    return fleet.head(n).to_dict(orient="records")
+    if dataset_id in _fleet_top_risk_cache:
+        return _fleet_top_risk_cache[dataset_id][:n]
+
+    raise HTTPException(status_code=404, detail="Engine not found")
 
 
 @app.get("/fleet/summary", response_model=FleetSummary)
@@ -139,26 +151,7 @@ async def fleet_summary(
     if dataset_id in _fleet_summary_cache:
         return _fleet_summary_cache[dataset_id]
 
-    if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
-        raise HTTPException(422, detail="dataset_id must be FD001–FD004")
-    try:
-        async with _compute_semaphore:
-            fleet = predict_fleet(dataset_id)
-    except FileNotFoundError as e:
-        raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
-
-    counts = fleet["risk_state"].value_counts().to_dict()
-    result = FleetSummary(
-        dataset_id=dataset_id,
-        n_engines=len(fleet),
-        state_counts={k: int(v) for k, v in counts.items()},
-        n_critical=int(counts.get("Critical", 0)),
-        mean_rul=round(float(fleet["rul_cycles"].mean()), 2),
-        median_rul=round(float(fleet["rul_cycles"].median()), 2),
-        highest_risk_engine=int(fleet.iloc[0]["engine_id"]),
-    )
-    _fleet_summary_cache[dataset_id] = result
-    return result
+    raise HTTPException(status_code=404, detail="Engine not found")
 
 
 @app.get("/fleet/handover", response_model=FleetHandover)
