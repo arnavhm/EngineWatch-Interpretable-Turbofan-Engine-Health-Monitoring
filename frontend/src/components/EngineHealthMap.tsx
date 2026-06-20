@@ -1,50 +1,30 @@
 /**
- * src/components/EngineHealthMap.tsx
+ * src/components/EngineHealthMap.tsx  (REPLACE the existing file entirely)
  *
- * Live turbofan cross-section heat map driven by /predict/{engine}/contributions.
- * Each module is coloured by its PC1 attribution direction and scaled in
- * opacity by its relative magnitude (dominant module = opacity 1.0).
- *
- * EICAS colour convention (matches enginewatch.tech Tailwind tokens):
- *   Healthy      →  #2DD4A7  (holding HI high)
- *   Caution      →  #F5A524  (critical, moderate driver)
- *   Warning      →  #FF5A5F  (critical, dominant driver — norm_magnitude ≥ 0.6)
- *   Inactive     →  #2A333C  (no active sensor / flat under single condition)
- *
- * Colour gate:
- *   direction === "healthy"                         → green
- *   direction === "critical" && norm_magnitude ≥ 0.6 → red
- *   direction === "critical" && norm_magnitude < 0.6 → amber
- *   direction === "inactive"                        → dark grey, fixed opacity
- *
- * Opacity for active modules:  0.25 + 0.75 * norm_magnitude
- * Inactive modules: opacity 0.35, fixed.
- *
- * Verification target: Engine 34 / FD001 → HPC dominant, red, opacity 1.0.
- *
- * NO retraining. Inference only. This component is a pure consumer of the
- * /predict/{engine_id}/contributions endpoint.
+ * Proper turbofan cross-section — aerodynamic paths, compression stage lines,
+ * bypass duct, core shaft. Same data contract as before; only the geometry changed.
  */
 
 import { useState, useEffect, useRef } from "react";
 import { getContributions } from "../api";
 import type { ContributionsResponse, ModuleHeat } from "../types";
 
-// ── EICAS tokens ─────────────────────────────────────────────────────────────
 const C = {
   healthy:  "#2DD4A7",
   caution:  "#F5A524",
   warning:  "#FF5A5F",
-  inactive: "#2A333C",
-  stroke:   "#1B2430",
+  inactive: "#1E2A35",
+  stroke:   "#2A3A4A",
+  strokeDim:"#1B2735",
   bg:       "#0B1014",
-  textDim:  "#6B7686",
-  text:     "#C8D2DE",
-  core:     "#3A5A80",
-  axis:     "#6B768640",
+  surface:  "#111820",
+  textDim:  "#4A5A68",
+  text:     "#9DB4C8",
+  textBright:"#C8D9E8",
+  core:     "#1E3448",
+  shaft:    "#243444",
 } as const;
 
-// ── colour + opacity helpers ──────────────────────────────────────────────────
 function moduleColor(m: ModuleHeat): string {
   if (!m.is_active || m.direction === "inactive") return C.inactive;
   if (m.direction === "healthy") return C.healthy;
@@ -52,72 +32,55 @@ function moduleColor(m: ModuleHeat): string {
 }
 
 function moduleOpacity(m: ModuleHeat): number {
-  if (!m.is_active || m.direction === "inactive") return 0.35;
-  return 0.25 + 0.75 * m.norm_magnitude;
+  if (!m.is_active || m.direction === "inactive") return 1;
+  return 0.20 + 0.80 * m.norm_magnitude;
 }
 
-// ── tooltip content ───────────────────────────────────────────────────────────
 function TooltipContent({ m }: { m: ModuleHeat }) {
+  const color = moduleColor(m);
   if (!m.is_active) {
     return (
-      <div style={{ padding: "10px 12px", maxWidth: 260 }}>
-        <div style={{ fontWeight: 700, color: C.text, marginBottom: 4 }}>
+      <div style={{ padding: "10px 14px", maxWidth: 260 }}>
+        <div style={{ fontWeight: 700, color: C.textBright, marginBottom: 4, fontSize: 12 }}>
           {m.display_name}
         </div>
-        <div style={{ color: C.textDim, fontSize: 12 }}>
+        <div style={{ color: C.textDim, fontSize: 11 }}>
           No active sensors — flat under single operating condition
         </div>
       </div>
     );
   }
-
-  const dirLabel =
-    m.direction === "healthy" ? "holding health" : "driving degradation";
-  const rank =
-    m.norm_magnitude === 1.0
-      ? "dominant PC1 driver"
-      : m.norm_magnitude >= 0.6
-      ? "major PC1 driver"
-      : "minor PC1 driver";
-
+  const rank = m.norm_magnitude === 1.0 ? "dominant driver"
+    : m.norm_magnitude >= 0.6 ? "major driver" : "minor driver";
+  const dirLabel = m.direction === "healthy" ? "holding health" : "driving degradation";
   return (
-    <div style={{ padding: "10px 12px", minWidth: 220, maxWidth: 300 }}>
-      <div style={{ fontWeight: 700, color: C.text, marginBottom: 2 }}>
-        {m.display_name}
+    <div style={{ padding: "10px 14px", minWidth: 220, maxWidth: 290 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+        <span style={{ fontWeight: 700, color: C.textBright, fontSize: 12 }}>{m.display_name}</span>
+        <span style={{ color: C.textDim, fontSize: 10, marginLeft: "auto" }}>{rank}</span>
       </div>
-      <div style={{ color: C.textDim, fontSize: 11, marginBottom: 8 }}>
-        {rank} · {dirLabel}
+      <div style={{ color: C.textDim, fontSize: 10, marginBottom: 8, borderBottom: `1px solid ${C.stroke}`, paddingBottom: 6 }}>
+        {dirLabel}
       </div>
-      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
-        <tbody>
-          {m.active_sensors.map((s) => (
-            <tr key={s.sensor_id}>
-              <td style={{ color: C.textDim, paddingRight: 8, paddingBottom: 3 }}>
-                {s.sensor_id}
-              </td>
-              <td style={{ color: C.text, paddingRight: 8, paddingBottom: 3 }}>
-                {s.symbol}
-              </td>
-              <td
-                style={{
-                  color: s.signed_contribution >= 0 ? C.healthy : C.warning,
-                  textAlign: "right",
-                  paddingBottom: 3,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {s.signed_contribution >= 0 ? "+" : ""}
-                {s.signed_contribution.toFixed(2)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        {m.active_sensors.map((s) => (
+          <div key={s.sensor_id} style={{ display: "flex", gap: 6, fontSize: 11 }}>
+            <span style={{ color: C.textDim, width: 28, flexShrink: 0 }}>{s.sensor_id}</span>
+            <span style={{ color: C.text, flex: 1 }}>{s.symbol}</span>
+            <span style={{
+              color: s.signed_contribution >= 0 ? C.healthy : C.warning,
+              fontVariantNumeric: "tabular-nums",
+            }}>
+              {s.signed_contribution >= 0 ? "+" : ""}{s.signed_contribution.toFixed(2)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-// ── main component ────────────────────────────────────────────────────────────
 interface Props {
   engineId: number;
   datasetId?: string;
@@ -140,266 +103,310 @@ export default function EngineHealthMap({ engineId, datasetId = "FD001" }: Props
       .finally(() => setLoading(false));
   }, [engineId, datasetId]);
 
-  // Build a lookup keyed by module string for O(1) access in SVG bindings
-  const heat = Object.fromEntries(
-    (data?.modules ?? []).map((m) => [m.module, m]),
-  );
+  const heat = Object.fromEntries((data?.modules ?? []).map((m) => [m.module, m]));
 
-  function fill(key: string) {
-    return heat[key] ? moduleColor(heat[key]) : C.inactive;
-  }
-  function opacity(key: string) {
-    return heat[key] ? moduleOpacity(heat[key]) : 0.35;
-  }
+  function fill(key: string)    { return heat[key] ? moduleColor(heat[key])   : C.inactive; }
+  function opacity(key: string) { return heat[key] ? moduleOpacity(heat[key]) : 1; }
 
   function onEnter(key: string, e: React.MouseEvent<SVGElement>) {
     setHovered(key);
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (rect) {
-      setTip({ x: e.clientX - rect.left + 12, y: e.clientY - rect.top - 8 });
-    }
+    updateTip(e);
   }
-  function onMove(e: React.MouseEvent<SVGElement>) {
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (rect) {
-      setTip({ x: e.clientX - rect.left + 12, y: e.clientY - rect.top - 8 });
-    }
+  function updateTip(e: React.MouseEvent<SVGElement>) {
+    const r = svgRef.current?.getBoundingClientRect();
+    if (r) setTip({ x: e.clientX - r.left + 14, y: e.clientY - r.top - 12 });
   }
   function onLeave() { setHovered(null); }
 
   const hoveredModule = hovered && heat[hovered] ? heat[hovered] : null;
+  const dominant = data ? heat[data.dominant_module] : null;
+  const dominantColor = dominant ? moduleColor(dominant) : C.textDim;
 
-  // ── module group factory (keeps JSX DRY) ────────────────────────────────────
-  function Mod({
-    id, children,
-  }: { id: string; children: React.ReactNode }) {
+  // ── helper: module group ──────────────────────────────────────────────────
+  function Mod({ id, children }: { id: string; children: React.ReactNode }) {
     return (
       <g
-        id={`module-${id}`}
         onMouseEnter={(e) => onEnter(id, e)}
-        onMouseMove={onMove}
+        onMouseMove={updateTip}
         onMouseLeave={onLeave}
-        style={{ cursor: "pointer", transition: "opacity 0.25s ease" }}
+        style={{ cursor: "pointer" }}
       >
         {children}
       </g>
     );
   }
 
+  // ── stage lines (compression visual) ────────────────────────────────────
+  function StageLines({ x1, y1, x2, y2, count = 5, clr }: {
+    x1: number; y1: number; x2: number; y2: number; count?: number; clr: string;
+  }) {
+    const lines = [];
+    for (let i = 1; i < count; i++) {
+      const t = i / count;
+      const lx = x1 + (x2 - x1) * t;
+      const ly1 = y1 + (y2 - y1) * t * 0.3;
+      const ly2 = y2 - (y2 - y1) * t * 0.3 + (y2 - y1) * t;
+      lines.push(
+        <line key={i} x1={lx} y1={Math.min(ly1, y1 + 4)} x2={lx} y2={Math.max(ly2, y2 - 4)}
+          stroke={clr} strokeWidth="0.8" opacity="0.35" />
+      );
+    }
+    return <>{lines}</>;
+  }
+
   return (
-    <div
-      style={{
-        background: C.bg,
-        borderRadius: 12,
-        padding: "20px 24px",
-        position: "relative",
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      }}
-    >
-      {/* ── header ── */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 16 }}>
-        <span style={{ color: C.text, fontSize: 13, fontWeight: 700, letterSpacing: "0.06em" }}>
+    <div style={{
+      background: C.bg,
+      borderRadius: 12,
+      padding: "18px 20px 14px",
+      position: "relative",
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+    }}>
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <span style={{ color: C.textBright, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em" }}>
           ENGINE HEALTH MAP
         </span>
-        <span style={{ color: C.textDim, fontSize: 11 }}>PC1 ATTRIBUTION BY MODULE</span>
-        {loading && (
-          <span style={{ color: C.textDim, fontSize: 11, marginLeft: "auto" }}>
-            loading…
-          </span>
-        )}
-        {error && (
-          <span style={{ color: C.warning, fontSize: 11, marginLeft: "auto" }}>
-            {error}
-          </span>
-        )}
+        <span style={{ color: C.textDim, fontSize: 10, letterSpacing: "0.04em" }}>
+          PC1 ATTRIBUTION · {datasetId}
+        </span>
+        {loading && <span style={{ color: C.textDim, fontSize: 10, marginLeft: "auto" }}>loading…</span>}
+        {error   && <span style={{ color: C.warning, fontSize: 10, marginLeft: "auto" }}>{error}</span>}
       </div>
 
-      {/* ── SVG engine cross-section ── */}
       <div style={{ position: "relative" }}>
         <svg
           ref={svgRef}
-          viewBox="0 0 820 340"
+          viewBox="0 0 780 240"
           style={{ width: "100%", display: "block" }}
           xmlns="http://www.w3.org/2000/svg"
         >
-          {/* nacelle cowl */}
-          <rect
-            x="46" y="72" width="690" height="196"
-            rx="72" ry="72"
-            fill="none" stroke={C.stroke} strokeWidth="2"
-          />
-          {/* nozzle cone */}
-          <polygon
-            points="622,102 704,132 704,208 622,238"
-            fill={C.core} opacity={0.4} stroke={C.stroke} strokeWidth="1"
-          />
-          {/* inlet lip */}
-          <ellipse cx="62" cy="170" rx="14" ry="96" fill="none" stroke={C.stroke} strokeWidth="1.5" />
-          {/* centerline */}
-          <line x1="62" y1="170" x2="712" y2="170"
-            stroke={C.axis} strokeWidth="1" strokeDasharray="4 5" />
-
-          {/* ── BYPASS — top + bottom bands ── */}
+          {/* ── BYPASS DUCT (top + bottom bands) ── */}
           <Mod id="bypass">
-            <polygon points="238,82 620,82 620,100 238,100"
+            {/* top bypass band */}
+            <path
+              d="M 158,52 L 620,44 L 640,56 L 620,56 L 158,64 Z"
               fill={fill("bypass")} opacity={opacity("bypass")}
-              stroke={C.stroke} strokeWidth="1.5" />
-            <polygon points="238,258 620,258 620,240 238,240"
+              stroke={C.stroke} strokeWidth="0.8"
+            />
+            {/* bottom bypass band */}
+            <path
+              d="M 158,188 L 620,184 L 640,184 L 620,196 L 158,188 Z"
               fill={fill("bypass")} opacity={opacity("bypass")}
-              stroke={C.stroke} strokeWidth="1.5" />
+              stroke={C.stroke} strokeWidth="0.8"
+            />
           </Mod>
+
+          {/* ── NACELLE outer shell (top) ── */}
+          <path
+            d="M 72,120 Q 90,50 158,52 L 620,44 Q 665,42 695,80 L 710,120"
+            fill="none" stroke={C.stroke} strokeWidth="1.5"
+          />
+          {/* nacelle outer shell (bottom) */}
+          <path
+            d="M 72,120 Q 90,190 158,188 L 620,196 Q 665,198 695,160 L 710,120"
+            fill="none" stroke={C.stroke} strokeWidth="1.5"
+          />
+          {/* nozzle plug */}
+          <path
+            d="M 695,80 Q 730,100 740,120 Q 730,140 695,160"
+            fill={C.core} stroke={C.stroke} strokeWidth="1"
+          />
+
+          {/* ── CORE inner cowl (top + bottom) ── */}
+          <path d="M 158,74  L 620,68  L 640,80  L 620,80  L 158,86"
+            fill="none" stroke={C.strokeDim} strokeWidth="0.8" />
+          <path d="M 158,166 L 620,160 L 640,160 L 620,172 L 158,166"
+            fill="none" stroke={C.strokeDim} strokeWidth="0.8" />
 
           {/* ── FAN ── */}
           <Mod id="fan">
-            <polygon points="96,78 168,90 168,250 96,262"
+            <path
+              d="M 100,78 L 158,74 L 158,166 L 100,162 Q 72,155 72,120 Q 72,85 100,78 Z"
               fill={fill("fan")} opacity={opacity("fan")}
-              stroke={C.stroke} strokeWidth="1.5" />
+              stroke={C.stroke} strokeWidth="1"
+            />
+            {/* fan blade lines */}
+            {[88,96,104,112,120,128,136,144,152].map((y) => (
+              <line key={y} x1="74" y1={y} x2="157" y2={y + (y < 120 ? -2 : 2)}
+                stroke={fill("fan")} strokeWidth="1.2" opacity="0.5" />
+            ))}
+            {/* nose cone */}
+            <path d="M 72,120 Q 58,120 46,120" stroke={C.textDim} strokeWidth="1" fill="none"/>
+            <ellipse cx="46" cy="120" rx="10" ry="14" fill={C.shaft} stroke={C.stroke} strokeWidth="1"/>
           </Mod>
 
           {/* ── LPC ── */}
           <Mod id="lpc">
-            <polygon points="168,102 238,110 238,230 168,238"
+            <path
+              d="M 158,86 L 230,90 L 230,150 L 158,154 L 158,86 Z"
               fill={fill("lpc")} opacity={opacity("lpc")}
-              stroke={C.stroke} strokeWidth="1.5" />
+              stroke={C.stroke} strokeWidth="1"
+            />
+            <StageLines x1={158} y1={86} x2={230} y2={90} count={4} clr={fill("lpc")} />
           </Mod>
 
-          {/* ── HPC ── */}
+          {/* ── HPC — widest, most prominent ── */}
           <Mod id="hpc">
-            <polygon points="238,110 372,134 372,206 238,230"
+            <path
+              d="M 230,90 L 420,96 L 420,144 L 230,150 Z"
               fill={fill("hpc")} opacity={opacity("hpc")}
-              stroke={C.stroke} strokeWidth="1.5" />
+              stroke={C.stroke} strokeWidth="1"
+            />
+            <StageLines x1={230} y1={90} x2={420} y2={96} count={9} clr={fill("hpc")} />
           </Mod>
 
-          {/* ── BURNER ── */}
+          {/* ── BURNER / COMBUSTOR ── */}
           <Mod id="burner">
-            <polygon points="372,134 432,134 432,206 372,206"
+            <path
+              d="M 420,96 L 490,98 L 490,142 L 420,144 Z"
               fill={fill("burner")} opacity={opacity("burner")}
-              stroke={C.stroke} strokeWidth="1.5" />
+              stroke={C.stroke} strokeWidth="1"
+            />
+            {/* combustor can suggestion */}
+            <ellipse cx="455" cy="120" rx="22" ry="18"
+              fill="none" stroke={fill("burner")} strokeWidth="1" opacity="0.4"/>
           </Mod>
 
           {/* ── HPT ── */}
           <Mod id="hpt">
-            <polygon points="432,132 512,130 512,210 432,208"
+            <path
+              d="M 490,98 L 560,94 L 560,146 L 490,142 Z"
               fill={fill("hpt")} opacity={opacity("hpt")}
-              stroke={C.stroke} strokeWidth="1.5" />
+              stroke={C.stroke} strokeWidth="1"
+            />
+            <StageLines x1={490} y1={98} x2={560} y2={94} count={4} clr={fill("hpt")} />
           </Mod>
 
           {/* ── LPT ── */}
           <Mod id="lpt">
-            <polygon points="512,130 622,102 622,238 512,210"
+            <path
+              d="M 560,94 L 648,80 L 648,160 L 560,146 Z"
               fill={fill("lpt")} opacity={opacity("lpt")}
-              stroke={C.stroke} strokeWidth="1.5" />
+              stroke={C.stroke} strokeWidth="1"
+            />
+            <StageLines x1={560} y1={94} x2={648} y2={80} count={6} clr={fill("lpt")} />
           </Mod>
 
-          {/* ── CORE SHAFT — sits on top ── */}
+          {/* ── CORE SHAFT ── */}
           <Mod id="core">
-            <rect x="110" y="163" width="512" height="14" rx="4"
+            <rect x="100" y="115" width="548" height="10" rx="3"
               fill={fill("core")} opacity={opacity("core")}
-              stroke={C.stroke} strokeWidth="1" />
+              stroke={C.stroke} strokeWidth="0.8"
+            />
           </Mod>
 
-          {/* ── EPR / OVERALL ── */}
+          {/* ── EPR badge (off-engine) ── */}
           <Mod id="epr">
-            <rect x="640" y="272" width="128" height="26" rx="13"
-              fill={fill("epr")} opacity={opacity("epr")}
-              stroke={C.stroke} strokeWidth="1.5" />
-            <text x="704" y="289" textAnchor="middle"
-              fill={C.textDim} fontSize="10" fontFamily="inherit">
+            <rect x="658" y="198" width="96" height="22" rx="11"
+              fill={fill("epr")} opacity={0.7}
+              stroke={C.stroke} strokeWidth="0.8"
+            />
+            <text x="706" y="212" textAnchor="middle"
+              fill={C.textDim} fontSize="9" fontFamily="inherit">
               EPR · OVERALL
             </text>
           </Mod>
 
-          {/* ── labels ── */}
-          {(
-            [
-              { x: 132, label: "FAN" },
-              { x: 203, label: "LPC" },
-              { x: 305, label: "HPC" },
-              { x: 402, label: "BURNER", dim: true },
-              { x: 472, label: "HPT" },
-              { x: 567, label: "LPT" },
-            ] as Array<{ x: number; label: string; dim?: boolean }>
-          ).map(({ x, label, dim }) => (
-            <text key={label} x={x} y={292} textAnchor="middle"
-              fill={dim ? C.textDim : C.text}
-              fontSize="11" fontWeight="600" letterSpacing="0.04em"
-              fontFamily="inherit" pointerEvents="none">
-              {label}
-            </text>
-          ))}
-          <text x="140" y="76" textAnchor="middle"
-            fill={C.textDim} fontSize="10" fontFamily="inherit" pointerEvents="none">
-            BYPASS
+          {/* ── module labels ── */}
+          {([
+            { x: 115,  y: 213, label: "FAN",    key: "fan"    },
+            { x: 194,  y: 213, label: "LPC",    key: "lpc"    },
+            { x: 325,  y: 213, label: "HPC",    key: "hpc"    },
+            { x: 455,  y: 213, label: "BURNER", key: "burner", dim: true },
+            { x: 525,  y: 213, label: "HPT",    key: "hpt"    },
+            { x: 604,  y: 213, label: "LPT",    key: "lpt"    },
+          ] as Array<{ x: number; y: number; label: string; key: string; dim?: boolean }>)
+            .map(({ x, y, label, key, dim }) => (
+              <text key={label} x={x} y={y} textAnchor="middle"
+                fill={hovered === key ? moduleColor(heat[key] ?? {} as ModuleHeat) : (dim ? C.textDim : C.text)}
+                fontSize="10" fontWeight="600" letterSpacing="0.06em"
+                fontFamily="inherit" style={{ transition: "fill 0.2s" }}>
+                {label}
+              </text>
+            ))
+          }
+          <text x="390" y="38" textAnchor="middle"
+            fill={C.textDim} fontSize="9" fontFamily="inherit">BYPASS DUCT</text>
+
+          {/* ── flow direction arrow ── */}
+          <defs>
+            <marker id="arr" viewBox="0 0 8 8" refX="6" refY="4"
+              markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M1 1L7 4L1 7" fill="none" stroke={C.textDim} strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round"/>
+            </marker>
+          </defs>
+          <line x1="22" y1="120" x2="42" y2="120"
+            stroke={C.textDim} strokeWidth="0.8" markerEnd="url(#arr)" />
+          <text x="22" y="133" textAnchor="middle" fill={C.textDim} fontSize="8" fontFamily="inherit">
+            airflow
           </text>
 
           {/* ── legend ── */}
-          <g transform="translate(0,316)">
-            {(
-              [
-                { color: C.healthy,  label: "holding health" },
-                { color: C.caution,  label: "driving degradation" },
-                { color: C.warning,  label: "dominant driver" },
-                { color: C.inactive, label: "inactive (flat sensor)" },
-              ] as Array<{ color: string; label: string }>
-            ).map(({ color, label }, i) => (
-              <g key={label} transform={`translate(${i * 190}, 0)`}>
-                <rect width="12" height="12" rx="2" fill={color} />
-                <text x="18" y="10" fill={C.textDim} fontSize="10" fontFamily="inherit">
-                  {label}
-                </text>
-              </g>
-            ))}
+          <g transform="translate(0,228)">
+            {([
+              { c: C.healthy,  l: "holding health"    },
+              { c: C.caution,  l: "degrading"         },
+              { c: C.warning,  l: "dominant driver"   },
+              { c: C.inactive, l: "flat / inactive",  border: true },
+            ] as Array<{ c: string; l: string; border?: boolean }>)
+              .map(({ c, l, border }, i) => (
+                <g key={l} transform={`translate(${i * 178}, 0)`}>
+                  <rect width="10" height="10" rx="2" fill={c}
+                    stroke={border ? C.stroke : "none"} strokeWidth="0.8" />
+                  <text x="16" y="9" fill={C.textDim} fontSize="9" fontFamily="inherit">{l}</text>
+                </g>
+              ))
+            }
           </g>
         </svg>
 
-        {/* ── hover tooltip ── */}
+        {/* tooltip */}
         {hoveredModule && (
-          <div
-            style={{
-              position: "absolute",
-              left: tip.x,
-              top: tip.y,
-              background: "#141C24",
-              border: `1px solid ${C.stroke}`,
-              borderRadius: 8,
-              pointerEvents: "none",
-              zIndex: 10,
-              boxShadow: "0 4px 20px #00000060",
-            }}
-          >
+          <div style={{
+            position: "absolute",
+            left: Math.min(tip.x, 460),
+            top: tip.y,
+            background: "#0F1922",
+            border: `1px solid ${C.stroke}`,
+            borderRadius: 8,
+            pointerEvents: "none",
+            zIndex: 10,
+            boxShadow: "0 8px 24px #00000080",
+          }}>
             <TooltipContent m={hoveredModule} />
           </div>
         )}
       </div>
 
-      {/* ── dominant driver one-liner ── */}
+      {/* dominant driver strip */}
       {data && (
-        <div
-          style={{
-            marginTop: 14,
-            padding: "8px 12px",
-            background: "#141C24",
-            borderRadius: 6,
-            borderLeft: `3px solid ${
-              heat[data.dominant_module]
-                ? moduleColor(heat[data.dominant_module])
-                : C.inactive
-            }`,
-          }}
-        >
-          <span style={{ color: C.textDim, fontSize: 11 }}>DOMINANT DRIVER&nbsp;&nbsp;</span>
-          <span style={{ color: C.text, fontSize: 12, fontWeight: 600 }}>
+        <div style={{
+          marginTop: 10,
+          padding: "7px 12px",
+          background: C.surface,
+          borderRadius: 6,
+          borderLeft: `3px solid ${dominantColor}`,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+        }}>
+          <span style={{ color: C.textDim, fontSize: 10, letterSpacing: "0.05em" }}>
+            DOMINANT DRIVER
+          </span>
+          <span style={{ color: C.textBright, fontSize: 11, fontWeight: 600 }}>
             {data.dominant_driver_text}
           </span>
-          <span style={{ color: C.textDim, fontSize: 11, marginLeft: 8 }}>
-            · relative attribution — absolute state on risk gauge
+          <span style={{ color: C.textDim, fontSize: 10, marginLeft: "auto" }}>
+            relative attribution — absolute state on risk gauge
           </span>
         </div>
       )}
 
-      {/* ── empty / all-inactive guard ── */}
-      {data && data.modules.every((m) => !m.is_active) && (
-        <div style={{ color: C.textDim, fontSize: 12, marginTop: 8 }}>
+      {data?.modules.every((m) => !m.is_active) && (
+        <div style={{ color: C.textDim, fontSize: 11, marginTop: 8 }}>
           No active sensor contributions for this cycle.
         </div>
       )}
