@@ -200,3 +200,16 @@ aog_simulator:
 
 api:
   enable_ci: true
+
+diagram_axis: hpc
+
+sensor_module_map:
+  fan:     [s1, s5, s8, s13, s18, s19]   # T2, P2, Nf, NRf, Nf_dmd, PCNfR_dmd
+  lpc:     [s2]                           # T24
+  hpc:     [s3, s7, s11, s12, s17]        # T30, P30, Ps30, phi, htBleed
+  hpt:     [s20]                          # W31  (HPT coolant bleed)
+  lpt:     [s4, s21]                      # T50, W32  (LPT coolant bleed)
+  bypass:  [s6, s15]                      # P15, BPR
+  core:    [s9, s14]                      # Nc, NRc
+  burner:  [s16]                          # farB  (flat under single condition)
+  epr:     [s10]                          # epr   (flat under single condition)

@@ -1,0 +1,97 @@
+<svg viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+  <style>
+    :root {
+      --ew-bg: #0d1117;
+      --ew-stroke: #1b2430;
+      --ew-text: #c8d2de;
+      --ew-text-dim: #6b7686;
+      --eicas-green: #2ecc71;
+      --eicas-amber: #f5a623;
+      --eicas-red: #e74c3c;
+      --eicas-inactive: #3a4150;
+      --eicas-core: #5b7aa5;
+    }
+    .panel  { fill: var(--ew-bg); }
+    .frame  { fill: none; stroke: var(--ew-stroke); stroke-width: 2; }
+    .axis   { stroke: var(--ew-text-dim); stroke-width: 1; stroke-dasharray: 4 5; opacity: .55; }
+    .module { stroke: var(--ew-stroke); stroke-width: 1.5; cursor: pointer; }
+    .nominal  { fill: var(--eicas-green); }
+    .caution  { fill: var(--eicas-amber); }
+    .crit     { fill: var(--eicas-red); }
+    .inactive { fill: var(--eicas-inactive); }
+    .core     { fill: var(--eicas-core); }
+    .decor    { fill: none; stroke: var(--ew-stroke); stroke-width: 1.5; }
+    .lbl      { fill: var(--ew-text); font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+    .lbl-dim  { fill: var(--ew-text-dim); font-size: 10px; letter-spacing: .03em; }
+    .title    { fill: var(--ew-text); font-size: 14px; font-weight: 700; letter-spacing: .06em; }
+  </style>
+
+  <rect class="panel" x="0" y="0" width="820" height="380" rx="14"/>
+  <text class="title" x="26" y="34">ENGINE HEALTH MAP — PC1 CONTRIBUTION BY MODULE</text>
+
+  <!-- nacelle / cowl -->
+  <rect class="frame" x="46" y="92" width="690" height="196" rx="72" ry="72"/>
+  <ellipse class="decor" cx="62" cy="190" rx="14" ry="96"/>
+  <!-- nozzle cone -->
+  <polygon class="core" points="622,122 704,152 704,228 622,258"/>
+  <!-- centerline -->
+  <line class="axis" x1="62" y1="190" x2="712" y2="190"/>
+
+  <!-- bypass duct (annulus, two bands) -->
+  <g id="module-bypass" data-module="bypass" class="module">
+    <polygon points="238,102 620,102 620,120 238,120"/>
+    <polygon points="238,278 620,278 620,260 238,260"/>
+  </g>
+
+  <!-- core gas-path modules, fore -> aft -->
+  <g id="module-fan" data-module="fan" class="module">
+    <polygon points="96,98 168,110 168,270 96,282"/>
+  </g>
+  <g id="module-lpc" data-module="lpc" class="module">
+    <polygon points="168,122 238,130 238,250 168,258"/>
+  </g>
+  <g id="module-hpc" data-module="hpc" class="module">
+    <polygon points="238,130 372,154 372,226 238,250"/>
+  </g>
+  <g id="module-burner" data-module="burner" class="module">
+    <polygon points="372,154 432,154 432,226 372,226"/>
+  </g>
+  <g id="module-hpt" data-module="hpt" class="module">
+    <polygon points="432,152 512,150 512,230 432,228"/>
+  </g>
+  <g id="module-lpt" data-module="lpt" class="module">
+    <polygon points="512,150 622,122 622,258 512,230"/>
+  </g>
+
+  <!-- core shaft (thin centred zone, top z-order) -->
+  <g id="module-core" data-module="core" class="module">
+    <rect x="110" y="183" width="512" height="14" rx="4"/>
+  </g>
+
+  <!-- EPR / overall (off-engine indicator) -->
+  <g id="module-epr" data-module="epr" class="module">
+    <rect x="640" y="300" width="128" height="28" rx="14"/>
+    <text class="lbl-dim" x="704" y="318" text-anchor="middle" style="fill:#0d1117;font-weight:700">EPR · OVERALL</text>
+  </g>
+
+  <!-- module labels -->
+  <text class="lbl"     x="132" y="312" text-anchor="middle">FAN</text>
+  <text class="lbl"     x="203" y="312" text-anchor="middle">LPC</text>
+  <text class="lbl"     x="305" y="312" text-anchor="middle">HPC</text>
+  <text class="lbl-dim" x="402" y="312" text-anchor="middle">BURNER</text>
+  <text class="lbl"     x="472" y="312" text-anchor="middle">HPT</text>
+  <text class="lbl"     x="567" y="312" text-anchor="middle">LPT</text>
+  <text class="lbl-dim" x="140" y="96"  text-anchor="middle">BYPASS</text>
+
+  <!-- legend -->
+  <g transform="translate(26,350)">
+    <rect class="nominal"  x="0"   y="0" width="13" height="13" rx="2"/>
+    <text class="lbl-dim"  x="20"  y="11">holding health</text>
+    <rect class="caution"  x="150" y="0" width="13" height="13" rx="2"/>
+    <text class="lbl-dim"  x="170" y="11">driving degradation</text>
+    <rect class="crit"     x="320" y="0" width="13" height="13" rx="2"/>
+    <text class="lbl-dim"  x="340" y="11">dominant driver</text>
+    <rect class="inactive" x="470" y="0" width="13" height="13" rx="2"/>
+    <text class="lbl-dim"  x="490" y="11">inactive (flat sensor)</text>
+  </g>
+</svg>

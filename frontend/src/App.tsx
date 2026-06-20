@@ -9,6 +9,7 @@ import TrajectoryPanel from './components/TrajectoryPanel';
 import SensorPanel from './components/SensorPanel';
 import AnomalyScatter from './components/AnomalyScatter';
 import CsvUpload from './components/CsvUpload';
+import EngineHealthMap from './components/EngineHealthMap';
 import { usePredict } from './hooks/usePredict';
 
 function Panel({ title, children, className = '' }: { title: string, children?: React.ReactNode, className?: string }) {
@@ -53,6 +54,9 @@ function App() {
           </Panel>
           <Panel title="Risk Dial" className="col-span-1">
             <RiskDial data={engineData} loading={engineLoading} />
+          </Panel>
+          <Panel title="Engine Health Map" className="md:col-span-1 lg:col-span-2">
+            <EngineHealthMap engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
           <Panel title="Fleet Summary" className="md:col-span-1 lg:col-span-2">
             <FleetSummary datasetId={selectedDataset} onSelectEngine={setSelectedEngine} />

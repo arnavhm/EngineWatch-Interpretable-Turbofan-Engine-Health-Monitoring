@@ -218,3 +218,7 @@ def fleet_handover(
         narrative=narrative,
         narration_available=narrative is not None,
     )
+
+
+from api.routes.contributions import router as contributions_router
+app.include_router(contributions_router)

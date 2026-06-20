@@ -62,3 +62,40 @@ export interface CsvPrediction {
   risk_state: string;
   health_index?: number;
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADDITIONS FOR src/types.ts
+// Append after your existing PredictResponse / FleetSummary interfaces.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SensorContribution {
+  sensor_id: string;         // "s11"
+  symbol: string;            // "Ps30"
+  description: string;       // "Static pressure at HPC outlet"
+  signed_contribution: number;
+  abs_contribution: number;
+}
+
+export interface ModuleHeat {
+  module: string;                    // "hpc"
+  display_name: string;             // "HPC"
+  direction: "healthy" | "critical" | "inactive";
+  signed_heat: number;
+  norm_magnitude: number;           // [0,1] — dominant module = 1.0
+  norm_signed: number;              // [-1,1]
+  active_sensors: SensorContribution[];
+  is_active: boolean;
+}
+
+export interface ContributionsResponse {
+  engine_id: number;
+  dataset_id: string;
+  cycle: number;
+  dominant_module: string;
+  dominant_driver_text: string;     // "HPC — Ps30, T30, phi driving degradation"
+  modules: ModuleHeat[];
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────

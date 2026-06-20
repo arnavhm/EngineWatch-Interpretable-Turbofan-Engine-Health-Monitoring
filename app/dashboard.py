@@ -34,6 +34,7 @@ from app.components.rul_prediction import render_rul_prediction
 from app.components.model_evaluation import render_model_evaluation
 from app.components.aog_panel import render_aog_panel
 from app.components.sensor_panel import render_sensor_panel
+from app.components.engine_diagram import render_engine_diagram
 from app.components.narration_panel import render_narration_panel
 from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
 from app.components.csv_upload_panel import render_csv_upload_panel
@@ -215,6 +216,11 @@ def main() -> None:
     st.divider()
     render_sensor_panel(engine_df, selected_engine_id)
 
+    config = load_config()
+
+    st.divider()
+    render_engine_diagram(engine_df, artifacts, config, dataset_id=selected_dataset)
+
     st.divider()
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -226,7 +232,6 @@ def main() -> None:
     st.divider()
 
     # AOG panel — full width
-    config = load_config()
     last_row = engine_df.iloc[-1]
 
     # Handle dual risk scores for FD003/FD004 dual-fault datasets.

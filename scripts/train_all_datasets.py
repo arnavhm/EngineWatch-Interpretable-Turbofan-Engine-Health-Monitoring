@@ -152,6 +152,13 @@ def _dataset_config(base_config: dict, dataset_id: str) -> dict:
             raise KeyError(f"Missing config key: regimes.by_dataset.{dataset_id}")
         regime_cfg["n_regimes"] = int(by_dataset[dataset_id])
 
+    # Apply dataset overrides for health index axes
+    hi_axes = config.get("health_index", {}).get("axes", {})
+    for axis_name, axis_cfg in hi_axes.items():
+        axis_by_dataset = axis_cfg.get("by_dataset", {})
+        if dataset_id in axis_by_dataset:
+            axis_cfg["sensors"] = axis_by_dataset[dataset_id]
+
     return config
 
 

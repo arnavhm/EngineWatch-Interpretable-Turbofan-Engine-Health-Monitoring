@@ -1,4 +1,4 @@
-import type { PredictResponse, FleetSummary, TopRiskItem, TrajectoryResponse, SensorResponse, AnomalyPoint } from './types';
+import type { PredictResponse, FleetSummary, TopRiskItem, TrajectoryResponse, SensorResponse, AnomalyPoint, ContributionsResponse } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE;
 
@@ -66,4 +66,24 @@ export async function getSensors(engineId: number, datasetId: string): Promise<S
 export async function getAnomaly(datasetId: string): Promise<AnomalyPoint[]> {
   const params = new URLSearchParams({ dataset_id: datasetId });
   return fetchJson<AnomalyPoint[]>(`/anomaly?${params.toString()}`);
+}
+
+// ADDITION FOR src/api.ts
+// Append after your existing getPredict / getFleetSummary functions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// import { ContributionsResponse } from "./types";   // already in types.ts
+
+export async function getContributions(
+  engineId: number,
+  datasetId: string = "FD001",
+): Promise<ContributionsResponse> {
+  const res = await fetch(
+    `/api/predict/${engineId}/contributions?dataset_id=${datasetId}`,
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail ?? `HTTP ${res.status}`);
+  }
+  return res.json();
 }

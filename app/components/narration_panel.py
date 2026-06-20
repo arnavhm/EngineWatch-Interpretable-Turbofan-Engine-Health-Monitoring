@@ -93,10 +93,11 @@ def _build_engine_context(
     config: dict[str, Any],
     artifacts: dict[str, Any],
     fleet_df: Optional[pd.DataFrame],
+    dataset_id: str,
 ) -> dict[str, Any]:
     """
     Purpose:       Extract the current engine context used by the assistant.
-    Input:         current_row (pd.Series), config (dict), artifacts (dict), fleet_df (DataFrame | None).
+    Input:         current_row (pd.Series), config (dict), artifacts (dict), fleet_df (DataFrame | None), dataset_id (str).
     Output:        dict with scalar engine fields, sensor attribution, and anomaly context.
     Assumptions:   current_row is the last-cycle snapshot for one selected engine.
     Failure:       Raises ValueError/KeyError only if required context is missing.
@@ -125,10 +126,14 @@ def _build_engine_context(
     if axis_name not in hi_pca_by_axis:
         raise KeyError("PCA attribution artifacts are missing.")
 
+    from features.health_index import compute_sensor_contributions
+
     pca = hi_pca_by_axis[axis_name]
     axis_cfg = config.get("health_index", {}).get("axes", {}).get(axis_name, {})
+    
+    axis_sensors = axis_cfg.get("by_dataset", {}).get(dataset_id, axis_cfg.get("sensors", []))
     sensor_cols = [
-        sensor for sensor in axis_cfg.get("sensors", []) if sensor in current_row.index
+        sensor for sensor in axis_sensors if sensor in current_row.index
     ]
 
     if not sensor_cols:
@@ -137,27 +142,35 @@ def _build_engine_context(
     loadings = np.asarray(pca.components_[0], dtype=float)
     if len(loadings) != len(sensor_cols):
         raise ValueError("PCA loading shape does not match the sensor list.")
+        
+    df_for_contrib = current_row.to_frame().T
+    contrib_df = compute_sensor_contributions(df_for_contrib, pca, sensor_cols)
+    contrib_last = contrib_df.iloc[-1]
+    
+    sensor_contributions = {}
+    for s in sensor_cols:
+        col_name = f"{s}_contribution"
+        if col_name in contrib_last:
+            sensor_contributions[s] = float(contrib_last[col_name])
 
-    sensor_values = current_row[sensor_cols].to_numpy(dtype=float)
-    contributions = sensor_values * loadings
-    abs_contributions = np.abs(contributions)
-    contribution_total = float(abs_contributions.sum()) or 1.0
+    abs_contribs = {k: abs(v) for k, v in sensor_contributions.items()}
+    contribution_total = sum(abs_contribs.values()) or 1.0
 
-    top_indices = np.argsort(abs_contributions)[::-1][:3]
+    sorted_sensors = sorted(abs_contribs.keys(), key=lambda k: abs_contribs[k], reverse=True)
+    loading_dict = dict(zip(sensor_cols, loadings))
+
     top_sensors: dict[str, dict[str, float]] = {}
-    for rank, sensor_index in enumerate(top_indices, start=1):
-        sensor_name = sensor_cols[int(sensor_index)]
-        signed_contribution = float(contributions[int(sensor_index)])
-        loading = float(loadings[int(sensor_index)])
-        sensor_value = float(sensor_values[int(sensor_index)])
-        share_pct = float(
-            abs_contributions[int(sensor_index)] / contribution_total * 100.0
-        )
+    for rank, sensor_name in enumerate(sorted_sensors[:3], start=1):
+        sensor_value = float(current_row[sensor_name])
+        loading = float(loading_dict[sensor_name])
+        signed_contrib = float(sensor_contributions[sensor_name])
+        share_pct = float(abs_contribs[sensor_name] / contribution_total * 100.0)
+        
         top_sensors[sensor_name] = {
             "rank": int(rank),
             "sensor_value": round(sensor_value, 4),
             "loading": round(loading, 4),
-            "signed_contribution": round(signed_contribution, 4),
+            "signed_contribution": round(signed_contrib, 4),
             "abs_contribution_share_pct": round(share_pct, 1),
         }
 
@@ -204,6 +217,7 @@ def render_narration_panel(
     rul_ci: tuple[float, float],
     artifacts: dict[str, Any],
     fleet_df: Optional[pd.DataFrame] = None,
+    dataset_id: str = "FD001",
 ) -> None:
     """
     Purpose:       Build the Gemini prompt from the current engine snapshot, fetch the
@@ -277,7 +291,7 @@ def render_narration_panel(
     model_name = config["dashboard"]["gemini_model_name"]
 
     try:
-        engine_context = _build_engine_context(current_row, config, artifacts, fleet_df)
+        engine_context = _build_engine_context(current_row, config, artifacts, fleet_df, dataset_id)
     except (KeyError, ValueError) as exc:
         st.warning(f"Narration unavailable: {exc}")
         return

@@ -56,7 +56,7 @@ class HealthIndexArtifacts:
 
 def compute_sensor_contributions(
     engine_df: pd.DataFrame,
-    hi_artifacts: "HealthIndexArtifacts",
+    pca: PCA,
     sensor_cols: list,
 ) -> pd.DataFrame:
     """
@@ -79,7 +79,7 @@ def compute_sensor_contributions(
 
     Input:
         engine_df    - DataFrame for ONE engine, must contain scaled sensor columns
-        hi_artifacts - HealthIndexArtifacts with pca, loadings, scaler
+        pca          - Fitted PCA object for the relevant axis
         sensor_cols  - list of sensor column names (must match artifacts)
 
     Output:
@@ -101,7 +101,11 @@ def compute_sensor_contributions(
     if missing:
         raise KeyError(f"Sensor columns missing from engine_df: {missing}")
 
-    loadings = hi_artifacts.loadings
+    loadings = pca.components_[0]
+    
+    # Apply sign flip if the PCA was aligned during training
+    if getattr(pca, "_hi_flip_sign", False):
+        loadings = -loadings
 
     if len(loadings) != len(sensor_cols):
         raise ValueError(
@@ -109,7 +113,7 @@ def compute_sensor_contributions(
             f"sensor_cols length {len(sensor_cols)}"
         )
 
-    sensor_values = engine_df[sensor_cols].values
+    sensor_values = engine_df[sensor_cols].values.astype(float)
     contributions = sensor_values * loadings
 
     contrib_df = pd.DataFrame(
@@ -691,3 +695,68 @@ def build_health_index(
         monotonicity_score=mono_scores,
     )
     return train_with_dual, test_with_dual, artifacts
+
+
+def aggregate_module_contributions(
+    sensor_contributions: dict[str, float],
+    config: dict,
+) -> dict[str, dict]:
+    """
+    Purpose:      Aggregate per-sensor PC1 contributions into per-module signed
+                  heat for the engine cross-section diagram. Maps the output of
+                  compute_sensor_contributions() onto the physical C-MAPSS
+                  modules (Saxena 2008, Table 2) so the dashboard can colour each
+                  module by how strongly — and in which direction — it drives the
+                  Health Index for the currently selected engine/cycle.
+    Input:        sensor_contributions: {sensor_id -> signed contribution to HI},
+                      sign aligned to compute_health_index orientation
+                      (>0 pushes HI toward healthy[1.0]; <0 toward critical[0.0]).
+                      Flat sensors are expected to be ABSENT from this dict.
+                  config: parsed config.yaml; must contain 'sensor_module_map'.
+    Output:       {module -> {
+                      'signed_heat': float,       # sum of signed contributions
+                      'magnitude': float,         # |signed_heat|
+                      'norm_signed': float,       # signed_heat / max|module|, [-1,1]
+                      'norm_magnitude': float,    # magnitude  / max|module|, [0,1]
+                      'direction': str,           # 'healthy'|'critical'|'inactive'
+                      'active_sensors': {sid: contribution, ...},
+                      'is_active': bool,          # False if no mapped sensor present
+                  }}
+                  norm_* are scaled across modules in THIS frame, so the dominant
+                  module is exactly 1.0 (drives diagram opacity).
+    Assumptions:  Module map is exhaustive over the active sensor set. A sensor
+                  present in the contribution vector but missing from the map is
+                  an error, not silently dropped.
+    Failure:      KeyError if config lacks 'sensor_module_map'.
+                  ValueError if a contributed sensor is unmapped.
+    """
+    module_map: dict[str, list[str]] = config["sensor_module_map"]
+
+    mapped = {s for sensors in module_map.values() for s in sensors}
+    unmapped = set(sensor_contributions) - mapped
+    if unmapped:
+        raise ValueError(f"Unmapped sensors in contribution vector: {sorted(unmapped)}")
+
+    out: dict[str, dict] = {}
+    for module, sensors in module_map.items():
+        active = {s: sensor_contributions[s] for s in sensors if s in sensor_contributions}
+        signed = float(sum(active.values()))
+        out[module] = {
+            "signed_heat": signed,
+            "magnitude": abs(signed),
+            "active_sensors": active,
+            "is_active": len(active) > 0,
+        }
+
+    max_mag = max((m["magnitude"] for m in out.values()), default=0.0)
+    for m in out.values():
+        m["norm_signed"] = m["signed_heat"] / max_mag if max_mag > 0 else 0.0
+        m["norm_magnitude"] = m["magnitude"] / max_mag if max_mag > 0 else 0.0
+        if not m["is_active"]:
+            m["direction"] = "inactive"
+        elif m["signed_heat"] < 0:
+            m["direction"] = "critical"
+        else:
+            m["direction"] = "healthy"
+
+    return out
