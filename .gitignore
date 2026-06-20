@@ -10,3 +10,4 @@ models/
 .env
 secrets.toml
 scratch/
+DEPLOY.md
