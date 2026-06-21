@@ -14,7 +14,7 @@ EngineWatch monitors turbofan engine degradation and predicts Remaining Useful L
 - **Health Variability** — instability signal preceding failure
 - **Cluster-based health state** — Healthy / Degrading / Critical
 - **Continuous Risk Score** — distance-based, normalised to [0, 1]
-- **RUL Prediction** with confidence intervals — best model RMSE 18.40 cycles
+- **RUL Prediction** with confidence intervals — best model RMSE [RETIRED — see canonical table]
 - **Sensor contribution breakdown** — which sensors are driving degradation
 - **Anomaly detection** — flags engines outside the training distribution
 
@@ -36,7 +36,7 @@ KMeans Clustering (k=3, silhouette 0.40)
     ↓
 Risk Score (Euclidean distance to Critical centroid)
     ↓
-RUL Prediction (Gradient Boosting, RMSE 18.40)
+RUL Prediction (HistGradientBoostingRegressor, RMSE [RETIRED — see canonical table])
     ↓
 Streamlit Dashboard
 ```
@@ -52,9 +52,9 @@ Streamlit Dashboard
 | Silhouette score             | 0.40              |
 | Spearman ρ (HI monotonicity) | −0.925            |
 | Risk–RUL Pearson r           | −0.768            |
-| Best model                   | Gradient Boosting |
-| RMSE                         | 18.40 cycles      |
-| NASA score                   | 607.3             |
+| Best model                   | HistGradientBoostingRegressor |
+| RMSE                         | [RETIRED — see canonical table] |
+| NASA score                   | [RETIRED — see canonical table] |
 | Late predictions             | 46 / 100 engines  |
 | Early predictions            | 54 / 100 engines  |
 
@@ -191,7 +191,10 @@ Pipeline validated across all four CMAPSS datasets:
 - FD001 — 1 condition, 1 fault mode ✅ Full dashboard support
 - FD002 — 6 conditions, 1 fault mode ✅ Pipeline validated
 - FD003 — 1 condition, 2 fault modes ✅ Pipeline validated
-- FD004 — 6 conditions, 2 fault modes ✅ Pipeline validated (NASA score 107,724 → 14,655)
+- FD004 — 6 conditions, 2 fault modes ✅ Pipeline validated
+  - FD004 documented limitation: NASA score 53,028 on hpc-only routing. 
+    The previously cited 12,998 figure depended on fan-axis routing 
+    (a non-predictive signal) and is retired.
 
 Multi-condition dashboard visualization is in active development.
 

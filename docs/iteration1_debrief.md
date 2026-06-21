@@ -194,10 +194,13 @@ Why gradient boosting won:
   - gradient_boosting: RMSE 18.60, NASA 698.0
 - Best RMSE is gradient_boosting at 18.60.
 
-What risk_score 68% importance means:
-- Gradient-boosting feature importance:
-  - risk_score = 0.681477 (68.15%)
-- Most split gain came from risk_score, so the model relies heavily on the continuous risk embedding.
+What risk_score importance means:
+- Feature importance (permutation, HistGBR):
+  risk_score 67.2%, HI_velocity 31.5%, health_index 0.9%, HI_variability 0.4%.
+  Note: health_index drop from 20% to 0.9% is a permutation-importance-with-correlated-features 
+  artifact — risk_score is derived from health_index, so the model leans on risk_score 
+  when health_index is shuffled. health_index remains foundational.
+- Most gain came from risk_score, so the model relies heavily on the continuous risk embedding.
 
 What RMSE 18.60 means operationally:
 - Typical prediction error magnitude is about 18.6 cycles at evaluation points (one final observed cycle per test engine).
@@ -264,9 +267,9 @@ Why NASA score penalizes late predictions more:
 | RMSE gradient_boosting | 18.60 | rul_verification_checklist |
 | NASA gradient_boosting | 698.0 | rul_verification_checklist |
 | Best model | gradient_boosting | rul_verification_checklist |
-| Feature importance risk_score | 0.681477 | rul_verification_checklist |
-| Feature importance health_index | 0.203469 | rul_verification_checklist |
-| Feature importance HI_velocity | 0.111475 | rul_verification_checklist |
+| Feature importance risk_score | [RETIRED — see canonical table] | rul_verification_checklist |
+| Feature importance health_index | [RETIRED — see canonical table] | rul_verification_checklist |
+| Feature importance HI_velocity | [RETIRED — see canonical table] | rul_verification_checklist |
 | Feature importance HI_variability | 0.003578 | rul_verification_checklist |
 | 04 evaluation RMSE (GB) | 18.60 cycles | 04_rul_evaluation |
 | 04 evaluation NASA (GB) | 698.0 | 04_rul_evaluation |

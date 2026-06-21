@@ -23,7 +23,7 @@ Use this checklist **after feature engineering and baseline model behavior are s
 - [ ] `features/variability.py` (rolling std)
 - [ ] `model/clustering.py` (KMeans, `k=3`, `random_state=42`)
 - [ ] `model/risk.py` (distance-based normalized risk)
-- [ ] `model/rul.py` (baseline regressors: Linear/RandomForest/GradientBoosting)
+- [ ] `model/rul.py` (baseline regressors: Linear/RandomForest/HistGradientBoostingRegressor)
 - [ ] `evaluation/validation.py`:
   - [ ] RMSE
   - [ ] NASA score

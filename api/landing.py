@@ -130,7 +130,7 @@ LANDING_HTML: str = """<!DOCTYPE html>
 
   <div class="foot">
     Health states follow EICAS crew-alerting convention &mdash; <b>green</b> nominal, <b>amber</b> caution, <b>red</b> warning.<br>
-    Built on the C-MAPSS run-to-failure dataset (Saxena et al., 2008). Sample: engine 34 / FD001 &rarr; risk <b>0.74</b>, RUL <b>3.7 cycles</b>, state <b>Critical</b>.
+    Built on the C-MAPSS run-to-failure dataset (Saxena et al., 2008). Sample: engine 34 / FD001 &rarr; risk_score <b>0.7403</b> &middot; rul_cycles <b>3.70</b> &middot; health_index <b>0.260</b> &middot; risk_state <b>Critical</b> &middot; rmse <b>18.459</b> &middot; model = monotonic HistGradientBoostingRegressor.
   </div>
 </div>
 </body>

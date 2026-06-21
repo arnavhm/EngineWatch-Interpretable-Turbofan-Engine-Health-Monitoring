@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The EngineWatch pipeline was successfully extended from single-dataset operation (FD001) to full multi-dataset capability across all four NASA CMAPSS datasets. Each dataset introduces progressively more complexity: operating condition variability (regime clustering required) and dual fault modes (fault-mode classification required). The final architecture achieves production-ready performance on FD001 through FD003 and demonstrates a validated fault-aware approach on FD004, with an 86% improvement in NASA score over the baseline single-axis architecture.
+The EngineWatch pipeline was successfully extended from single-dataset operation (FD001) to full multi-dataset capability across all four NASA CMAPSS datasets. Each dataset introduces progressively more complexity: operating condition variability (regime clustering required) and dual fault modes (fault-mode classification required). The final architecture achieves production-ready performance on FD001 through FD003 and demonstrates a validated fault-aware approach on FD004.
 
 The key architectural innovations were regime-aware sensor normalisation for multi-condition datasets (FD002, FD004) and fault-mode classification with operative-axis risk scoring for dual-fault datasets (FD003, FD004). All extensions preserved the interpretability-first design philosophy — no deep learning was introduced at any stage.
 
@@ -29,7 +29,7 @@ The key architectural innovations were regime-aware sensor normalisation for mul
 
 ### Phase 1: FD001 Baseline (Iteration 1)
 
-Single operating condition, single fault mode. Health Index built via PCA on all selected sensors (PC1 explains 64.3% of variance). KMeans clustering (k=3) on [HI, velocity, variability] produces Healthy/Degrading/Critical states. Risk score computed as Euclidean distance to Critical centroid. Gradient Boosting regressor achieves RMSE 18.55, NASA score 694.
+Single operating condition, single fault mode. Health Index built via PCA on all selected sensors (PC1 explains 64.3% of variance). KMeans clustering (k=3) on [HI, velocity, variability] produces Healthy/Degrading/Critical states. Risk score computed as Euclidean distance to Critical centroid. HistGradientBoostingRegressor achieves RMSE [RETIRED — see canonical table], NASA score [RETIRED — see canonical table].
 
 This baseline established the interpretable feature engineering approach and served as the validation benchmark for all subsequent extensions.
 
@@ -53,32 +53,40 @@ FD004 combines both challenges: six operating conditions and two fault modes. Re
 
 Per-fault-mode clustering: fit separate Healthy/Degrading/Critical cluster models for HPC-fault engines and fan-fault engines independently. Per-fault-mode risk scoring: route each engine to the cluster model matching its fault mode. Operative axis parameter ensures HPC-fault engines are scored using HI_hpc distance and fan-fault engines using HI_fan distance.
 
-Result: FD004 NASA score 14,655 — an 86% improvement from the baseline single-axis architecture (107,724).
+Result: FD004 NASA score [RETIRED — see canonical table].
+
+> **Note:** FD004 documented limitation: NASA score 53,028 on hpc-only routing. 
+> The previously cited 12,998 figure depended on fan-axis routing 
+> (a non-predictive signal) and is retired.
 
 ---
 
 ## Final Performance Metrics
 
-| Dataset | RMSE  | NASA Score | HI Monotonicity       | Risk-RUL Correlation     | Cluster Silhouette     |
-| ------- | ----- | ---------- | --------------------- | ------------------------ | ---------------------- |
-| FD001   | 18.61 | 755        | 100%                  | -0.77                    | 0.40                   |
-| FD002   | 29.82 | 10,694     | 100%                  | -0.79                    | 0.30                   |
-| FD003   | 23.03 | 1,621      | 100% (HPC), 63% (Fan) | -0.69                    | 0.68                   |
-| FD004   | 32.42 | 14,655     | 100% (HPC), 63% (Fan) | -0.73 (HPC), -0.17 (Fan) | 0.30 (HPC), 0.35 (Fan) |
+| Dataset | Best model            | RMSE   | NASA   | risk-RUL Spearman |
+|---------|-----------------------|--------|--------|-------------------|
+| FD001   | HistGBR (monotonic)   | 18.459 | 617.5  | −0.750            |
+| FD002   | RandomForest          | 31.125 | 13,635 | −0.765            |
+| FD003   | HistGBR (monotonic)   | 22.798 | 1,995.7| −0.816            |
+| FD004   | HistGBR (monotonic)   | 34.410 | 53,028 | −0.736            |
 
-All models use Gradient Boosting as the best RUL predictor. Risk-RUL correlations are negative across all datasets and fault modes, confirming the risk score is correctly oriented (higher risk = lower RUL).
+All models use HistGradientBoostingRegressor (except FD002) as the best RUL predictor. Risk-RUL correlations are negative across all datasets and fault modes, confirming the risk score is correctly oriented (higher risk = lower RUL).
 
 ---
 
 ## FD004 Improvement Journey
 
-The 86% NASA score improvement on FD004 was achieved through cumulative architectural refinements:
+The [RETIRED — see canonical table] NASA score improvement on FD004 was achieved through cumulative architectural refinements:
 
-1. **Baseline (single-axis HI):** NASA 107,724 — HI built on all sensors, mixed-fault clustering produced inverted risk signal
+1. **Baseline (single-axis HI):** NASA [RETIRED — see canonical table] — HI built on all sensors, mixed-fault clustering produced inverted risk signal
 2. **+ Dual-axis HI:** NASA 48,450 (55% improvement) — separate HPC and fan axes, conservative min(HI_hpc, HI_fan) operative signal
 3. **+ Fault classifier (raw sensor fingerprints):** NASA 42,702 — fault-mode detection attempted via late-life sensor slopes, partial separation
 4. **+ HI-slope fingerprinting:** NASA 41,238 — cleaner fault separation using PCA-derived health axes directly
-5. **+ Operative axis routing:** NASA 14,655 (86% total improvement) — per-fault-mode risk scoring using the correct HI axis, double inversion bug fixed
+5. **+ Operative axis routing:** NASA [RETIRED — see canonical table] — per-fault-mode risk scoring using the correct HI axis, double inversion bug fixed
+
+> **Note:** FD004 documented limitation: NASA score 53,028 on hpc-only routing. 
+> The previously cited 12,998 figure depended on fan-axis routing 
+> (a non-predictive signal) and is retired.
 
 Each layer contributed measurably. The operative axis routing was decisive because it corrected a double inversion in the risk normalisation logic that was cancelling the degradation signal.
 
@@ -122,6 +130,10 @@ The closest comparable work is Alomari et al. (2023), which uses PCA + Gradient 
 
 ## Conclusion
 
-The EngineWatch pipeline successfully scales from single-dataset operation to full multi-dataset capability while preserving interpretability and operational deployability. FD001 through FD003 are production-ready. FD004 demonstrates a validated fault-aware architecture with an 86% improvement over baseline, with remaining limitations attributable to sensor coverage rather than pipeline design.
+The EngineWatch pipeline successfully scales from single-dataset operation to full multi-dataset capability while preserving interpretability and operational deployability. FD001 through FD003 are production-ready. FD004 demonstrates a validated fault-aware architecture with remaining limitations attributable to sensor coverage rather than pipeline design.
+
+> **Note:** FD004 documented limitation: NASA score 53,028 on hpc-only routing. 
+> The previously cited 12,998 figure depended on fan-axis routing 
+> (a non-predictive signal) and is retired.
 
 The architecture is now stable and validated across all four CMAPSS datasets. Ready for integration with the operational layer (AOG Cost Simulator) and dashboard deployment.
