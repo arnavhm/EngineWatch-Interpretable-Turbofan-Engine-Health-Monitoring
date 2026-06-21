@@ -59,7 +59,7 @@ def main(dataset_id: str = "FD001") -> None:
     """
     import joblib
 
-    from model.predict import FEATURE_COLUMNS, _compute_rf_ci, predict_fleet
+    from model.predict import FEATURE_COLUMNS, _compute_rf_ci
 
     config = load_config()
 
@@ -95,13 +95,12 @@ def main(dataset_id: str = "FD001") -> None:
 
     print(f"[train] RUL artifacts saved → {artifact_dir}")
 
-    # ── 4. Generate fleet_cache using predict_fleet ───────────────────────
-    #    predict_fleet uses load_pipeline_data_uncached + _load_rul_artifacts_uncached,
-    #    so the cached values WILL match what /predict returns via live inference.
-    print("[train] Generating fleet cache via canonical predict_fleet()...")
-    fleet_df = predict_fleet(dataset_id)
-
-    # ── 5. Build structured fleet_cache (matches api/main.py expectations) ─
+    # ── 4. Build fleet cache from in-memory model + already-computed test_rs ──
+    #    No second pipeline run. Uses test_rs from step 1 and artifacts.best_model
+    #    directly. Values are identical to what /predict returns via live inference
+    #    because both use the same features (load_pipeline_data_uncached) and the
+    #    same model (artifacts.best_model).
+    print("[train] Generating fleet cache from in-memory model...")
     import os
 
     enable_ci = os.environ.get("ENABLE_CI", "true").lower() in ("true", "1", "yes")
@@ -112,24 +111,24 @@ def main(dataset_id: str = "FD001") -> None:
         and hasattr(rf_model, "estimators_")
     )
 
-    # Last cycle per engine (same slicing as predict_fleet)
+    # ── 5. Build structured fleet_cache (matches api/main.py expectations) ─
     last = test_rs.sort_values("cycle").groupby("unit").last().reset_index()
+    raw_preds = artifacts.best_model.predict(last[FEATURE_COLUMNS])
 
     per_engine: dict[int, dict] = {}
     engine_dicts_list: list[dict] = []
 
-    for _, row in fleet_df.iterrows():
-        engine_id = int(row["engine_id"])
+    for i, row in last.iterrows():
+        engine_id = int(row["unit"])
+        predicted_rul = max(float(raw_preds[i]), 0.0)
         ci_lower = ci_upper = ci_std = None
 
         if compute_ci:
-            feat_row = last[last["unit"] == engine_id][FEATURE_COLUMNS]
-            if not feat_row.empty:
-                ci_lower, ci_upper, ci_std = _compute_rf_ci(
-                    rf_model,
-                    feat_row.values,
-                    float(row["rul_cycles"]),
-                )
+            ci_lower, ci_upper, ci_std = _compute_rf_ci(
+                rf_model,
+                last.iloc[[i]][FEATURE_COLUMNS].values,
+                predicted_rul,
+            )
 
         pred_dict = {
             "engine_id": engine_id,
@@ -137,7 +136,7 @@ def main(dataset_id: str = "FD001") -> None:
             "health_index": float(row["health_index"]),
             "risk_score": float(row["risk_score"]),
             "risk_state": str(row["risk_state"]),
-            "rul_cycles": float(row["rul_cycles"]),
+            "rul_cycles": predicted_rul,
             "ci_lower": ci_lower,
             "ci_upper": ci_upper,
             "ci_std": ci_std,
@@ -150,7 +149,7 @@ def main(dataset_id: str = "FD001") -> None:
     engine_dicts_list.sort(key=lambda x: x["risk_score"], reverse=True)
 
     preds = [d["rul_cycles"] for d in engine_dicts_list]
-    counts = fleet_df["risk_state"].value_counts().to_dict()
+    counts = last["risk_state"].value_counts().to_dict()
     fleet_summary = {
         "dataset_id": dataset_id,
         "n_engines": len(per_engine),
