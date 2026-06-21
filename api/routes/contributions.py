@@ -22,21 +22,22 @@ router = APIRouter(tags=["contributions"])
 
 # ── Response schema ────────────────────────────────────────────────────────────
 
+
 class SensorContribution(BaseModel):
-    sensor_id: str            # "s11"
-    symbol: str               # "Ps30"
-    description: str          # "Static pressure at HPC outlet"
+    sensor_id: str  # "s11"
+    symbol: str  # "Ps30"
+    description: str  # "Static pressure at HPC outlet"
     signed_contribution: float
     abs_contribution: float
 
 
 class ModuleHeat(BaseModel):
-    module: str               # "hpc"
-    display_name: str         # "HPC"
-    direction: str            # "healthy" | "critical" | "inactive"
+    module: str  # "hpc"
+    display_name: str  # "HPC"
+    direction: str  # "healthy" | "critical" | "inactive"
     signed_heat: float
-    norm_magnitude: float     # [0,1] — dominant module = 1.0
-    norm_signed: float        # [-1,1]
+    norm_magnitude: float  # [0,1] — dominant module = 1.0
+    norm_signed: float  # [-1,1]
     active_sensors: list[SensorContribution]
     is_active: bool
 
@@ -44,9 +45,9 @@ class ModuleHeat(BaseModel):
 class ContributionsResponse(BaseModel):
     engine_id: int
     dataset_id: str
-    cycle: int                      # latest cycle used
-    dominant_module: str            # key of module with norm_magnitude == 1.0
-    dominant_driver_text: str       # "HPC — Ps30, T30, phi driving degradation"
+    cycle: int  # latest cycle used
+    dominant_module: str  # key of module with norm_magnitude == 1.0
+    dominant_driver_text: str  # "HPC — Ps30, T30, phi driving degradation"
     modules: list[ModuleHeat]
 
 

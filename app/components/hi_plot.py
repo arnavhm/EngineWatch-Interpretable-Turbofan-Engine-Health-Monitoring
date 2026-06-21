@@ -1,57 +1,65 @@
-import streamlit as st
-import plotly.graph_objects as go
 import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
 from app.theme import SECTION_TITLE_CSS
 from app.utils.theme import STATE_COLORS, TOKENS, apply_plotly_theme
+
 
 def render_hi_plot(df: pd.DataFrame, unit_id: int):
     st.markdown(
         f'<p style="{SECTION_TITLE_CSS}">Health Index Trajectory — Engine {unit_id}</p>',
         unsafe_allow_html=True,
     )
-    
+
     # Calculate rolling mean
     df_plot = df.copy()
-    df_plot["hi_rolling_mean"] = df_plot["health_index"].rolling(window=10, min_periods=1).mean()
-    
+    df_plot["hi_rolling_mean"] = (
+        df_plot["health_index"].rolling(window=10, min_periods=1).mean()
+    )
+
     fig = go.Figure()
-    
+
     # Add actual HI line
-    fig.add_trace(go.Scatter(
-        x=df_plot["cycle"],
-        y=df_plot["health_index"],
-        mode="lines",
-        name="Health Index",
-        line=dict(color=TOKENS["accent"], width=2),
-        hovertemplate="Cycle: %{x}<br>Health Index: %{y:.3f}<extra></extra>"
-    ))
-    
+    fig.add_trace(
+        go.Scatter(
+            x=df_plot["cycle"],
+            y=df_plot["health_index"],
+            mode="lines",
+            name="Health Index",
+            line=dict(color=TOKENS["accent"], width=2),
+            hovertemplate="Cycle: %{x}<br>Health Index: %{y:.3f}<extra></extra>",
+        )
+    )
+
     # Add rolling mean line (dashed)
-    fig.add_trace(go.Scatter(
-        x=df_plot["cycle"],
-        y=df_plot["hi_rolling_mean"],
-        mode="lines",
-        name="10-Cycle Rolling Mean",
-        line=dict(color=TOKENS["muted"], width=2, dash="dash"),
-        hoverinfo="skip"
-    ))
-    
+    fig.add_trace(
+        go.Scatter(
+            x=df_plot["cycle"],
+            y=df_plot["hi_rolling_mean"],
+            mode="lines",
+            name="10-Cycle Rolling Mean",
+            line=dict(color=TOKENS["muted"], width=2, dash="dash"),
+            hoverinfo="skip",
+        )
+    )
+
     # Add horizontal reference line at y=0.5
     fig.add_hline(
         y=0.5,
         line_dash="dot",
         line_color=STATE_COLORS["Critical"],
         annotation_text="Degradation Threshold",
-        annotation_position="bottom right"
+        annotation_position="bottom right",
     )
-    
+
     fig.update_layout(
         xaxis_title="Cycle",
         yaxis_title="Health Index",
         yaxis_range=[0, 1],
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    
+
     fig = apply_plotly_theme(fig)
     st.plotly_chart(fig, use_container_width=True)

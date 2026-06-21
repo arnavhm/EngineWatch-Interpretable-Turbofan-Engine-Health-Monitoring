@@ -3,10 +3,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from typing import Optional
+
+import joblib
 import numpy as np
 import streamlit as st
-import joblib
-from typing import Optional
 
 # Page config must be the first Streamlit command
 st.set_page_config(
@@ -14,30 +15,28 @@ st.set_page_config(
     layout="wide",
 )
 
-from app.utils.theme import (
-    inject_css, apply_plotly_theme, risk_dial, state_chip, STATE_COLORS,
-    DATASET_LABELS
-)
+from app.utils.theme import DATASET_LABELS, inject_css
+
 inject_css()
 
-from app.utils.data_loader import load_pipeline_data
-from data.load import load_config
-from app.utils.nl_parser import handle_nl_query
-from app.components.fleet_overview import render_fleet_overview
-from app.components.engine_selector import render_engine_selector
 from app.components.anomaly_panel import render_anomaly_panel
-from app.components.hi_plot import render_hi_plot
-from app.components.dynamics_plots import render_dynamics_plots
-from app.components.risk_gauge import render_risk_gauge
-from app.components.cluster_timeline import render_cluster_timeline
-from app.components.rul_prediction import render_rul_prediction
-from app.components.model_evaluation import render_model_evaluation
 from app.components.aog_panel import render_aog_panel
-from app.components.sensor_panel import render_sensor_panel
-from app.components.engine_diagram import render_engine_diagram
-from app.components.narration_panel import render_narration_panel
-from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
+from app.components.cluster_timeline import render_cluster_timeline
 from app.components.csv_upload_panel import render_csv_upload_panel
+from app.components.dynamics_plots import render_dynamics_plots
+from app.components.engine_diagram import render_engine_diagram
+from app.components.engine_selector import render_engine_selector
+from app.components.fleet_overview import render_fleet_overview
+from app.components.hi_plot import render_hi_plot
+from app.components.model_evaluation import render_model_evaluation
+from app.components.narration_panel import render_narration_panel
+from app.components.risk_gauge import render_risk_gauge
+from app.components.rul_prediction import render_rul_prediction
+from app.components.sensor_panel import render_sensor_panel
+from app.utils.data_loader import load_pipeline_data
+from app.utils.nl_parser import handle_nl_query
+from app.utils.rul_artifacts import load_or_rebuild_rul_artifacts
+from data.load import load_config
 
 
 @st.cache_resource
@@ -167,6 +166,7 @@ def main() -> None:
     # Sidebar quick natural-language lookup (allows programmatic engine selection)
     with st.sidebar:
         st.markdown("### 🔎 Quick Natural-Language Lookup")
+
         def process_quick_query():
             q = st.session_state.get("nl_quick_query_input", "").strip()
             if not q:
@@ -185,7 +185,7 @@ def main() -> None:
                 key="nl_quick_query_input",
             )
             st.form_submit_button("Run query", on_click=process_quick_query)
-            
+
         if "nl_msg" in st.session_state:
             msg_type, msg_text = st.session_state["nl_msg"]
             if msg_type == "success":
@@ -285,7 +285,6 @@ def main() -> None:
             f"Expected columns: {FEATURE_COLUMNS}. "
             f"Check that the RUL model artifact and pipeline output columns match."
         )
-
 
     except Exception as e:
         _rul_error = f"RUL prediction failed for {selected_dataset}: {e}"

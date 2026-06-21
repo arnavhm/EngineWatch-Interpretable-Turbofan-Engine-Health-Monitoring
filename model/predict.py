@@ -52,10 +52,11 @@ def predict_engine(engine_df: pd.DataFrame, dataset_id: str = "FD001") -> dict:
     predicted_rul = max(float(model.predict(features)[0]), 0.0)
 
     ci_lower = ci_upper = ci_std = None
-    
+
     import os
+
     from data.load import load_config
-    
+
     env_ci = os.environ.get("ENABLE_CI")
     if env_ci is not None:
         enable_ci = env_ci.lower() in ("true", "1", "yes")
@@ -66,7 +67,9 @@ def predict_engine(engine_df: pd.DataFrame, dataset_id: str = "FD001") -> dict:
     if enable_ci:
         rf_model = artifacts.all_models.get("random_forest")
         if rf_model is not None and hasattr(rf_model, "estimators_"):
-            ci_lower, ci_upper, ci_std = _compute_rf_ci(rf_model, features.values, predicted_rul)
+            ci_lower, ci_upper, ci_std = _compute_rf_ci(
+                rf_model, features.values, predicted_rul
+            )
 
     return {
         "engine_id": int(last_row["unit"].iloc[0]),
@@ -115,12 +118,7 @@ def predict_fleet(dataset_id: str = "FD001") -> pd.DataFrame:
     _, test_df = load_pipeline_data_uncached(dataset_id)
 
     # last cycle per engine (CMAPSS inference convention)
-    last = (
-        test_df.sort_values("cycle")
-        .groupby("unit")
-        .last()
-        .reset_index()
-    )
+    last = test_df.sort_values("cycle").groupby("unit").last().reset_index()
 
     artifacts = _load_rul_artifacts_uncached(dataset_id=dataset_id)
     model = artifacts.best_model
@@ -129,37 +127,46 @@ def predict_fleet(dataset_id: str = "FD001") -> pd.DataFrame:
     preds = model.predict(last[FEATURE_COLUMNS])
     preds = [max(float(p), 0.0) for p in preds]
 
-    return pd.DataFrame({
-        "engine_id": last["unit"].astype(int),
-        "health_index": last["health_index"].astype(float),
-        "risk_score": last["risk_score"].astype(float),
-        "risk_state": last["risk_state"].astype(str),
-        "rul_cycles": preds,
-    }).sort_values("risk_score", ascending=False).reset_index(drop=True)
-
+    return (
+        pd.DataFrame(
+            {
+                "engine_id": last["unit"].astype(int),
+                "health_index": last["health_index"].astype(float),
+                "risk_score": last["risk_score"].astype(float),
+                "risk_state": last["risk_state"].astype(str),
+                "rul_cycles": preds,
+            }
+        )
+        .sort_values("risk_score", ascending=False)
+        .reset_index(drop=True)
+    )
 
 
 def _rename_sensor_keys(raw: dict[str, float]) -> dict[str, float]:
     return {"s" + k.split("_")[1]: v for k, v in raw.items()}
 
+
 def get_engine_contributions(engine_id: int, dataset_id: str) -> dict | None:
-    from features.health_index import compute_sensor_contributions, aggregate_module_contributions
-    from model.sensor_metadata import SENSOR_METADATA, MODULE_DISPLAY_NAMES
-    from data.load import load_config
-    import joblib
     from pathlib import Path
 
+    import joblib
+
+    from data.load import load_config
+    from features.health_index import (aggregate_module_contributions,
+                                       compute_sensor_contributions)
+    from model.sensor_metadata import MODULE_DISPLAY_NAMES, SENSOR_METADATA
+
     config = load_config()
-    
+
     pca_path = Path("models") / dataset_id / "hi_pca_by_axis.joblib"
     try:
         hi_pca_by_axis = joblib.load(pca_path)
     except Exception:
         return None
-        
+
     _, test_df = load_pipeline_data_uncached(dataset_id)
     engine_df = test_df[test_df["unit"] == engine_id]
-    
+
     if engine_df.empty:
         return None
 
@@ -180,21 +187,27 @@ def get_engine_contributions(engine_id: int, dataset_id: str) -> dict | None:
             pca = hi_pca_by_axis[axis]
         except KeyError:
             continue
-            
+
         axis_cfg = config.get("health_index", {}).get("axes", {}).get(axis, {})
-        axis_sensors = axis_cfg.get("by_dataset", {}).get(dataset_id, axis_cfg.get("sensors", []))
+        axis_sensors = axis_cfg.get("by_dataset", {}).get(
+            dataset_id, axis_cfg.get("sensors", [])
+        )
         axis_sensors = [s for s in axis_sensors if s in engine_df.columns]
-        
+
         if not axis_sensors:
             continue
-            
-        df_contrib = compute_sensor_contributions(engine_df.iloc[[-1]], pca, axis_sensors)
+
+        df_contrib = compute_sensor_contributions(
+            engine_df.iloc[[-1]], pca, axis_sensors
+        )
         last_row = df_contrib.iloc[-1]
-        
+
         for s in axis_sensors:
             col_name = f"{s}_contribution"
             if col_name in last_row:
-                raw_contributions[s] = raw_contributions.get(s, 0.0) + float(last_row[col_name])
+                raw_contributions[s] = raw_contributions.get(s, 0.0) + float(
+                    last_row[col_name]
+                )
 
     contributions = _rename_sensor_keys(raw_contributions)
     module_heat = aggregate_module_contributions(contributions, config)
@@ -203,16 +216,21 @@ def get_engine_contributions(engine_id: int, dataset_id: str) -> dict | None:
 
     active_modules = {k: v for k, v in module_heat.items() if v["is_active"]}
     if active_modules:
-        dominant_key = max(active_modules, key=lambda k: active_modules[k]["norm_magnitude"])
+        dominant_key = max(
+            active_modules, key=lambda k: active_modules[k]["norm_magnitude"]
+        )
         dominant_data = active_modules[dominant_key]
         top_sensors = sorted(
             dominant_data["active_sensors"].items(),
             key=lambda x: abs(x[1]),
             reverse=True,
         )[:3]
-        symbols = [SENSOR_METADATA.get(sid, {}).get("symbol", sid) for sid, _ in top_sensors]
+        symbols = [
+            SENSOR_METADATA.get(sid, {}).get("symbol", sid) for sid, _ in top_sensors
+        ]
         direction_word = (
-            "holding health" if dominant_data["direction"] == "healthy"
+            "holding health"
+            if dominant_data["direction"] == "healthy"
             else "driving degradation"
         )
         dominant_text = (
@@ -228,25 +246,29 @@ def get_engine_contributions(engine_id: int, dataset_id: str) -> dict | None:
         enriched_sensors = []
         for sid, contrib in mod_data["active_sensors"].items():
             meta = SENSOR_METADATA.get(sid, {})
-            enriched_sensors.append({
-                "sensor_id": sid,
-                "symbol": meta.get("symbol", sid),
-                "description": meta.get("description", ""),
-                "signed_contribution": round(float(contrib), 4),
-                "abs_contribution": round(abs(float(contrib)), 4),
-            })
+            enriched_sensors.append(
+                {
+                    "sensor_id": sid,
+                    "symbol": meta.get("symbol", sid),
+                    "description": meta.get("description", ""),
+                    "signed_contribution": round(float(contrib), 4),
+                    "abs_contribution": round(abs(float(contrib)), 4),
+                }
+            )
         enriched_sensors.sort(key=lambda x: x["abs_contribution"], reverse=True)
 
-        modules_out.append({
-            "module": mod_key,
-            "display_name": MODULE_DISPLAY_NAMES.get(mod_key, mod_key),
-            "direction": mod_data["direction"],
-            "signed_heat": round(float(mod_data["signed_heat"]), 4),
-            "norm_magnitude": round(float(mod_data["norm_magnitude"]), 4),
-            "norm_signed": round(float(mod_data["norm_signed"]), 4),
-            "active_sensors": enriched_sensors,
-            "is_active": mod_data["is_active"],
-        })
+        modules_out.append(
+            {
+                "module": mod_key,
+                "display_name": MODULE_DISPLAY_NAMES.get(mod_key, mod_key),
+                "direction": mod_data["direction"],
+                "signed_heat": round(float(mod_data["signed_heat"]), 4),
+                "norm_magnitude": round(float(mod_data["norm_magnitude"]), 4),
+                "norm_signed": round(float(mod_data["norm_signed"]), 4),
+                "active_sensors": enriched_sensors,
+                "is_active": mod_data["is_active"],
+            }
+        )
 
     return {
         "engine_id": engine_id,

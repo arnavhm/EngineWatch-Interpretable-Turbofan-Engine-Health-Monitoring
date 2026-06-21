@@ -3,12 +3,15 @@
 Hybrid Architecture: A standalone inference entry point. The dashboard's CSV-upload and fleet flows call this service; interactive dashboard panels keep direct in-process pipeline calls. This API is read-only over the pipeline - it never retrains and never modifies pipeline outputs.
 """
 
-from fastapi import FastAPI, HTTPException, Query
-from api.schemas import EnginePrediction, FleetEngine, FleetHandover, FleetSummary
-from model.fleet_report import build_fleet_facts, narrate_handover
 from contextlib import asynccontextmanager
-import joblib
 from pathlib import Path
+
+import joblib
+from fastapi import FastAPI, HTTPException, Query
+
+from api.schemas import (EnginePrediction, FleetEngine, FleetHandover,
+                         FleetSummary)
+from model.fleet_report import build_fleet_facts, narrate_handover
 
 _predict_cache: dict[str, dict] = {}
 _fleet_summary_cache: dict[str, dict] = {}
@@ -17,40 +20,60 @@ _trajectory_cache: dict[str, dict] = {}
 _sensor_cache: dict[str, dict] = {}
 _anomaly_cache: dict[str, list] = {}
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         dataset_id = "FD001"
-        
-        cache_path = Path(__file__).resolve().parent.parent / "models" / f"fleet_cache_{dataset_id}.pkl"
+
+        cache_path = (
+            Path(__file__).resolve().parent.parent
+            / "models"
+            / f"fleet_cache_{dataset_id}.pkl"
+        )
         fleet_cache = joblib.load(cache_path)
-        
-        _predict_cache.update({
-            f"FD001:{eid}": result
-            for eid, result in fleet_cache["per_engine"].items()
-        })
+
+        _predict_cache.update(
+            {
+                f"FD001:{eid}": result
+                for eid, result in fleet_cache["per_engine"].items()
+            }
+        )
         _fleet_summary_cache["FD001"] = fleet_cache["fleet_summary"]
         _fleet_top_risk_cache["FD001"] = fleet_cache["top_risk"]
-        
-        traj_cache_path = Path(__file__).resolve().parent.parent / "models" / f"trajectory_cache_{dataset_id}.pkl"
+
+        traj_cache_path = (
+            Path(__file__).resolve().parent.parent
+            / "models"
+            / f"trajectory_cache_{dataset_id}.pkl"
+        )
         trajectory_cache = joblib.load(traj_cache_path)
-        _trajectory_cache.update({
-            f"FD001:{eid}": traj for eid, traj in trajectory_cache.items()
-        })
-        
-        sensor_cache_path = Path(__file__).resolve().parent.parent / "models" / f"sensor_cache_{dataset_id}.pkl"
+        _trajectory_cache.update(
+            {f"FD001:{eid}": traj for eid, traj in trajectory_cache.items()}
+        )
+
+        sensor_cache_path = (
+            Path(__file__).resolve().parent.parent
+            / "models"
+            / f"sensor_cache_{dataset_id}.pkl"
+        )
         sensor_cache = joblib.load(sensor_cache_path)
-        _sensor_cache.update({
-            f"FD001:{eid}": data for eid, data in sensor_cache.items()
-        })
-        
-        anomaly_cache_path = Path(__file__).resolve().parent.parent / "models" / f"anomaly_cache_{dataset_id}.pkl"
+        _sensor_cache.update(
+            {f"FD001:{eid}": data for eid, data in sensor_cache.items()}
+        )
+
+        anomaly_cache_path = (
+            Path(__file__).resolve().parent.parent
+            / "models"
+            / f"anomaly_cache_{dataset_id}.pkl"
+        )
         _anomaly_cache["FD001"] = joblib.load(anomaly_cache_path)
-        
+
         print("[startup] All caches loaded — zero compute at runtime")
     except Exception as e:
         print(f"[startup] Pre-warm failed: {e}")
     yield
+
 
 app = FastAPI(
     title="EngineWatch Inference API",
@@ -89,6 +112,7 @@ async def get_trajectory(engine_id: int, dataset_id: str = "FD001"):
         return _trajectory_cache[key]
     raise HTTPException(status_code=404, detail="Engine not found")
 
+
 @app.get("/sensors")
 async def get_sensors(engine_id: int, dataset_id: str = "FD001"):
     key = f"{dataset_id}:{engine_id}"
@@ -96,11 +120,13 @@ async def get_sensors(engine_id: int, dataset_id: str = "FD001"):
         return _sensor_cache[key]
     raise HTTPException(status_code=404, detail="Engine not found")
 
+
 @app.get("/anomaly")
 async def get_anomaly(dataset_id: str = "FD001"):
     if dataset_id in _anomaly_cache:
         return _anomaly_cache[dataset_id]
     raise HTTPException(status_code=404, detail="Engine not found")
+
 
 @app.get("/predict", response_model=EnginePrediction)
 async def predict(
@@ -120,9 +146,11 @@ async def predict(
 
     raise HTTPException(status_code=404, detail="Engine not found")
 
-from fastapi import UploadFile, File
+
 import io
+
 import pandas as pd
+from fastapi import File, UploadFile
 
 from model.predict_csv import predict_csv
 
@@ -221,4 +249,5 @@ def fleet_handover(
 
 
 from api.routes.contributions import router as contributions_router
+
 app.include_router(contributions_router)

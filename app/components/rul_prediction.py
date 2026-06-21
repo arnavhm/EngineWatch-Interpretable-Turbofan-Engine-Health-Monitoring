@@ -6,14 +6,13 @@ Purpose:      Display predicted Remaining Useful Life for the selected engine.
               Confidence interval from Random Forest tree variance.
 """
 
-import numpy as np
-import streamlit as st
-import pandas as pd
-from typing import Any
 
-from data.load import load_config
+import pandas as pd
+import streamlit as st
+
 from app.theme import SECTION_TITLE_CSS
 from app.utils.theme import STATE_COLORS
+from data.load import load_config
 
 FEATURE_COLUMNS = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
 
@@ -48,7 +47,7 @@ def render_rul_prediction(df: pd.DataFrame, dataset_id: str = "FD001") -> None:
     ci_lower = result["ci_lower"]
     ci_upper = result["ci_upper"]
     ci_std = result.get("ci_std")
-    risk_state = result["risk_state"]
+
     model_name = result.get("model_name", "Unknown")
     rmse = result.get("rmse")
 

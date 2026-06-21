@@ -4,6 +4,7 @@ Uploads a raw CMAPSS-shaped CSV to the /predict/csv API endpoint over HTTP.
 Config-driven base URL (env-first: API_BASE_URL env var → config.yaml fallback).
 Graceful degradation when the API is unreachable (no crashes, no stack traces).
 """
+
 from __future__ import annotations
 
 import os
@@ -13,7 +14,7 @@ import requests
 import streamlit as st
 
 from app.theme import SECTION_TITLE_CSS
-from app.utils.theme import STATE_COLORS, state_chip, DATASET_LABELS
+from app.utils.theme import DATASET_LABELS, STATE_COLORS, state_chip
 
 # ── Minimum cycles required by the pipeline for velocity/variability ────
 _MIN_CYCLES_NOTE = 20
@@ -29,7 +30,11 @@ def _resolve_api_base(config: dict) -> str:
     env = os.environ.get("API_BASE_URL", "").strip()
     if env:
         return env.rstrip("/")
-    return config.get("dashboard", {}).get("api_base_url", "http://localhost:8000").rstrip("/")
+    return (
+        config.get("dashboard", {})
+        .get("api_base_url", "http://localhost:8000")
+        .rstrip("/")
+    )
 
 
 def render_csv_upload_panel(config: dict) -> None:
@@ -73,7 +78,9 @@ def render_csv_upload_panel(config: dict) -> None:
 
     with col_btn:
         st.write("")  # vertical spacer to align with the uploader
-        predict_clicked = st.button("🚀 Predict", key="csv_upload_predict", use_container_width=True)
+        predict_clicked = st.button(
+            "🚀 Predict", key="csv_upload_predict", use_container_width=True
+        )
 
     if not predict_clicked or uploaded is None:
         return
@@ -137,7 +144,10 @@ def render_csv_upload_panel(config: dict) -> None:
 
     # ── skipped engines warning ─────────────────────────────────────────
     if skipped:
-        with st.expander(f"⚠️ {len(skipped)} engine(s) skipped — insufficient cycles (≥{_MIN_CYCLES_NOTE} needed)", expanded=False):
+        with st.expander(
+            f"⚠️ {len(skipped)} engine(s) skipped — insufficient cycles (≥{_MIN_CYCLES_NOTE} needed)",
+            expanded=False,
+        ):
             for s in skipped:
                 reason = s.get("reason", "unknown reason")
                 st.write(f"• **Engine {s.get('engine_id', '?')}** — {reason}")
@@ -156,15 +166,21 @@ def render_csv_upload_panel(config: dict) -> None:
 
         if has_ci_bounds and df["ci_lower"].notna().any():
             df["CI (cycles)"] = df.apply(
-                lambda r: f"{r['ci_lower']:.0f} – {r['ci_upper']:.0f}"
-                if pd.notna(r.get("ci_lower")) else "—",
+                lambda r: (
+                    f"{r['ci_lower']:.0f} – {r['ci_upper']:.0f}"
+                    if pd.notna(r.get("ci_lower"))
+                    else "—"
+                ),
                 axis=1,
             )
             display_cols.append("CI (cycles)")
         elif has_ci_std and df["ci_std"].notna().any():
             df["RUL ± σ"] = df.apply(
-                lambda r: f"{r['rul_cycles']:.0f} ± {r['ci_std']:.1f}"
-                if pd.notna(r.get("ci_std")) else f"{r['rul_cycles']:.0f}",
+                lambda r: (
+                    f"{r['rul_cycles']:.0f} ± {r['ci_std']:.1f}"
+                    if pd.notna(r.get("ci_std"))
+                    else f"{r['rul_cycles']:.0f}"
+                ),
                 axis=1,
             )
             display_cols.append("RUL ± σ")

@@ -35,16 +35,16 @@ Failure conditions:
     - Silhouette score < 0.3 → UserWarning (clusters may not be well-separated)
 """
 
-import numpy as np
-import pandas as pd
 import logging
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
+import warnings
 from dataclasses import dataclass, field
 from typing import Optional
-import warnings
 
+import numpy as np
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import StandardScaler
 
 # The three features that describe degradation state in this system.
 # These are the only approved inputs — do not add features here without

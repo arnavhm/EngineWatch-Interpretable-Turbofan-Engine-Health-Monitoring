@@ -30,10 +30,11 @@ Failure conditions:
     - window_size or min_periods not in config → KeyError
 """
 
-import pandas as pd
-import numpy as np
 from dataclasses import dataclass
 from typing import Optional
+
+import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -50,6 +51,7 @@ class VariabilityArtifacts:
         stats_by_axis:      {axis: {"mean": float, "std": float}} — normalised
                             train stats, inspection only (not used to transform).
     """
+
     window_size: int
     min_periods: int
     var_bounds_by_axis: dict
@@ -226,8 +228,12 @@ def compute_variability(
         # TEST / INFERENCE MODE: apply TRAIN bounds for EVERY axis (no re-fit)
         hpc_min, hpc_max = artifacts.var_bounds_by_axis["hpc"]
         fan_min, fan_max = artifacts.var_bounds_by_axis["fan"]
-        hpc_norm, _, _ = _normalise_variability(raw_hpc, var_min=hpc_min, var_max=hpc_max)
-        fan_norm, _, _ = _normalise_variability(raw_fan, var_min=fan_min, var_max=fan_max)
+        hpc_norm, _, _ = _normalise_variability(
+            raw_hpc, var_min=hpc_min, var_max=hpc_max
+        )
+        fan_norm, _, _ = _normalise_variability(
+            raw_fan, var_min=fan_min, var_max=fan_max
+        )
 
     df["HI_hpc_variability"] = hpc_norm
     df["HI_fan_variability"] = fan_norm

@@ -8,6 +8,7 @@ Usage:
 """
 
 import streamlit as st
+
 from app.components.aog_cost_simulator import compute_maintenance_decision
 from app.utils.theme import TOKENS
 
@@ -110,9 +111,11 @@ def render_aog_panel(
         "Total Cost": [
             _cr(d["preventive_cost_rs_cr"]),
             _cr(d["expected_aog_cost_rs_cr"]),
-            _cr(d["estimated_saving_rs_cr"])
-            if d["act_now"]
-            else _cr(d["expected_aog_cost_rs_cr"] - d["preventive_cost_rs_cr"]),
+            (
+                _cr(d["estimated_saving_rs_cr"])
+                if d["act_now"]
+                else _cr(d["expected_aog_cost_rs_cr"] - d["preventive_cost_rs_cr"])
+            ),
         ],
     }
 

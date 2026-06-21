@@ -20,8 +20,8 @@ No ML, no pipeline logic, no global mutable state. Pure presentation.
 
 from __future__ import annotations
 
-import streamlit as st
 import plotly.graph_objects as go
+import streamlit as st
 
 # --------------------------------------------------------------------------- #
 # Tokens — the single source of truth for the whole dashboard's look.
@@ -30,26 +30,26 @@ import plotly.graph_objects as go
 #  if strict charter parity is wanted.)
 # --------------------------------------------------------------------------- #
 TOKENS: dict[str, str] = {
-    "bg":        "#0B1014",
-    "panel":     "#121A21",
-    "panel_2":   "#18222B",
-    "border":    "#243039",
-    "text":      "#E6EDF3",
-    "muted":     "#8896A3",
-    "faint":     "#5C6975",
-    "healthy":   "#2DD4A7",  # EICAS nominal (green)
+    "bg": "#0B1014",
+    "panel": "#121A21",
+    "panel_2": "#18222B",
+    "border": "#243039",
+    "text": "#E6EDF3",
+    "muted": "#8896A3",
+    "faint": "#5C6975",
+    "healthy": "#2DD4A7",  # EICAS nominal (green)
     "degrading": "#F5A524",  # EICAS caution (amber)
-    "critical":  "#FF5A5F",  # EICAS warning (red)
-    "accent":    "#4DA3FF",  # neutral interactive data (kept off alarm colours)
-    "sans":      "'IBM Plex Sans', system-ui, sans-serif",
-    "mono":      "'IBM Plex Mono', monospace",
+    "critical": "#FF5A5F",  # EICAS warning (red)
+    "accent": "#4DA3FF",  # neutral interactive data (kept off alarm colours)
+    "sans": "'IBM Plex Sans', system-ui, sans-serif",
+    "mono": "'IBM Plex Mono', monospace",
 }
 
 # Canonical pipeline state labels -> colour. Keys match risk_state values.
 STATE_COLORS: dict[str, str] = {
-    "Healthy":   TOKENS["healthy"],
+    "Healthy": TOKENS["healthy"],
     "Degrading": TOKENS["degrading"],
-    "Critical":  TOKENS["critical"],
+    "Critical": TOKENS["critical"],
 }
 
 DATASET_LABELS: dict[str, str] = {
@@ -241,7 +241,9 @@ def risk_dial(
                     range=[0, 1],
                     tickwidth=1,
                     tickcolor=t["faint"],
-                    tickfont=dict(family="IBM Plex Mono, monospace", size=9, color=t["faint"]),
+                    tickfont=dict(
+                        family="IBM Plex Mono, monospace", size=9, color=t["faint"]
+                    ),
                 ),
                 bar=dict(color="rgba(0,0,0,0)"),  # hide default bar; needle = threshold
                 bgcolor=t["panel"],
@@ -285,10 +287,10 @@ def state_chip(state: str) -> str:
     return (
         f'<span style="display:inline-flex;align-items:center;gap:7px;'
         f'padding:5px 12px;border-radius:6px;font-family:{TOKENS["mono"]};'
-        f'font-size:12px;font-weight:500;letter-spacing:.4px;color:{color};'
+        f"font-size:12px;font-weight:500;letter-spacing:.4px;color:{color};"
         f'background:{color}1F;border:1px solid {color}59;">'
         f'<span style="width:7px;height:7px;border-radius:50%;background:{color};"></span>'
-        f'{state.upper()}</span>'
+        f"{state.upper()}</span>"
     )
 
 

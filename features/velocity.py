@@ -6,6 +6,7 @@ Velocity is the slope of a linear regression of HI over a rolling window of cycl
 """
 
 from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 

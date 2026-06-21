@@ -13,13 +13,14 @@ Assumptions:
 
 from __future__ import annotations
 
+import warnings
+from typing import Optional, Union
+
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
-import warnings
-from typing import Optional, Union
 
 
 class RegimeScaler:

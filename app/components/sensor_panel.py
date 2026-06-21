@@ -15,12 +15,12 @@ Usage:
     render_sensor_panel(engine_df, selected_engine_id)
 """
 
-import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import streamlit as st
 
-from app.utils.sensor_catalog import SENSOR_CATALOG
 from app.theme import SECTION_TITLE_CSS
+from model.sensor_metadata import SENSOR_CATALOG, SensorMeta
 from app.utils.theme import TOKENS, apply_plotly_theme, rgba
 
 

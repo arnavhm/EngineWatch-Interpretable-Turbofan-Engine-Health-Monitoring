@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
-import os
-import streamlit as st
 import joblib
+import streamlit as st
+
 from data.load import load_config
 
 
@@ -57,9 +58,7 @@ def _load_rul_artifacts_uncached(dataset_id: str = "FD001") -> Any:
 
     # Try dataset-specific artifacts first (models/FD001/, models/FD002/, etc.)
     artifact_name = os.environ.get("RUL_ARTIFACT_NAME", "rul_artifacts.joblib")
-    dataset_artifact_dir = (
-        Path(_project_root()) / "models" / dataset_id / artifact_name
-    )
+    dataset_artifact_dir = Path(_project_root()) / "models" / dataset_id / artifact_name
     if dataset_artifact_dir.exists():
         try:
             return joblib.load(dataset_artifact_dir)

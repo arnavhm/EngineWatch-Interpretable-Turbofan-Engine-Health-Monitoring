@@ -4,6 +4,7 @@ Defines the request/response contract. These mirror the columns the pipeline alr
 """
 
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -28,6 +29,7 @@ class EnginePrediction(BaseModel):
 
 class FleetEngine(BaseModel):
     """One engine's risk summary in a fleet listing."""
+
     engine_id: int
     risk_score: float = Field(..., ge=0.0, le=1.0)
     risk_state: str
@@ -36,6 +38,7 @@ class FleetEngine(BaseModel):
 
 class FleetSummary(BaseModel):
     """Fleet-level aggregate health snapshot."""
+
     dataset_id: str
     n_engines: int
     state_counts: dict = Field(..., description="{Healthy, Degrading, Critical: count}")
@@ -51,6 +54,7 @@ class FleetHandover(BaseModel):
                  optional LLM-authored narrative.
     Assumptions: narrative is null when Gemini is unavailable — never an error.
     """
+
     dataset_id: str
     facts: dict = Field(..., description="Structured fleet facts from the pipeline")
     narrative: Optional[str] = Field(

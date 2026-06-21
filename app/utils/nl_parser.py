@@ -14,7 +14,7 @@ Supported patterns:
 from __future__ import annotations
 
 import re
-from typing import Any, Optional, Tuple, Union, List
+from typing import Any, List, Optional, Tuple, Union
 
 
 def _normalize_dataset_token(token: str) -> Optional[str]:
@@ -46,7 +46,9 @@ def parse_engine_query(text: str) -> Optional[Tuple[str, Union[int, List[int], s
         dataset = f"FD00{ds_match.group(1)}"
 
     # look for fleet query
-    if re.search(r"\b(fleet|all\s*engines|entire\s*fleet|overview)\b", s, re.IGNORECASE):
+    if re.search(
+        r"\b(fleet|all\s*engines|entire\s*fleet|overview)\b", s, re.IGNORECASE
+    ):
         if not dataset:
             dataset = "FD001"
         return dataset, "FLEET"
@@ -103,9 +105,13 @@ def handle_nl_query(
         return False, "Could not parse query. Try 'state of engine 14 in FD001'.", None
 
     dataset_hint, engines = parsed
-    
+
     if engines == "FLEET":
-        return False, f"You asked about the {dataset_hint} fleet. Please scroll to the top 'Fleet Risk Overview' section for fleet-wide insights.", None
+        return (
+            False,
+            f"You asked about the {dataset_hint} fleet. Please scroll to the top 'Fleet Risk Overview' section for fleet-wide insights.",
+            None,
+        )
 
     engine_ids = sorted(df["unit"].unique())
 

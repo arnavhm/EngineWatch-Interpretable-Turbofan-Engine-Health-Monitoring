@@ -11,3 +11,5 @@ models/
 secrets.toml
 scratch/
 DEPLOY.md
+notebooks/data/processed/*.parquet
+flake8_report.txt

@@ -1,5 +1,6 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
+
 from app.utils.theme import state_chip
 
 
@@ -11,7 +12,7 @@ def render_engine_selector(df: pd.DataFrame, dataset_id: str = "FD001") -> int:
         # Allow programmatic selection via session_state['select_engine_override']
         override_key = f"select_engine_override_{dataset_id}"
         widget_key = f"engine_selector_{dataset_id}"
-        
+
         if override_key in st.session_state:
             try:
                 override_val = int(st.session_state[override_key])

@@ -10,7 +10,7 @@ from model.predict import predict_engine_by_id
 
 def get_engine_prediction(engine_id: int, dataset_id: str = "FD001") -> dict:
     """
-    Purpose: Resolve one engine's prediction for an API requst.
+    Purpose: Resolve one engine's prediction for an API request.
     Input: engine_id - CMAPPS unit number; dataset_id - CMAPPS subset (FD001–FD004)
     Output: prediction dict from the pure core (rul_cycles, risk_state, CI, etc.)
     Assumptions: engine_id exists in the dataset's test split

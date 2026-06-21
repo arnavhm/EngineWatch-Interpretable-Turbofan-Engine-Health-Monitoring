@@ -38,7 +38,7 @@ Failure conditions:
 import logging
 import warnings
 from dataclasses import dataclass, field
-from typing import Optional
+
 
 import numpy as np
 import pandas as pd
@@ -199,7 +199,9 @@ def fit_fault_classifier(
     min_cluster_size: int = fc_cfg["min_cluster_size"]
     random_state: int = config["clustering"]["random_state"]
 
-    n_modes = fc_cfg.get("n_fault_modes_by_dataset", {}).get(config.get("dataset_id"), None)
+    n_modes = fc_cfg.get("n_fault_modes_by_dataset", {}).get(
+        config.get("dataset_id"), None
+    )
     if n_modes == 1:
         logging.info(
             "[FAULT CLASSIFIER] %s is single-fault by config; forcing all engines to 'hpc'.",
@@ -336,7 +338,7 @@ def classify_engines(
     Failure conditions:
         KeyError if sensor columns missing from df.
     """
-    fc_cfg = config["fault_classifier"]
+
     window: int = artifacts.late_life_window
 
     # Single-fault fallback — assign all engines to dominant mode

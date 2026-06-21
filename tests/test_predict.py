@@ -1,6 +1,7 @@
-import pytest
+
 import pandas as pd
-import numpy as np
+import pytest
+
 from model.predict import predict_engine
 
 
@@ -61,7 +62,9 @@ def test_predict_engine_missing_columns():
 
 def test_predict_engine_empty_dataframe():
     # Empty DataFrame
-    df = pd.DataFrame(columns=["health_index", "HI_velocity", "HI_variability", "risk_score"])
+    df = pd.DataFrame(
+        columns=["health_index", "HI_velocity", "HI_variability", "risk_score"]
+    )
 
     with pytest.raises(ValueError) as exc_info:
         predict_engine(df, dataset_id="FD001")
@@ -70,8 +73,9 @@ def test_predict_engine_empty_dataframe():
 
 def test_predict_engine_by_id_success():
     from model.predict import predict_engine_by_id
+
     result = predict_engine_by_id(34, "FD001")
-    
+
     assert result["engine_id"] == 34
     assert result["dataset_id"] == "FD001"
     assert "rul_cycles" in result
@@ -84,6 +88,7 @@ def test_predict_engine_by_id_success():
 
 def test_predict_engine_by_id_invalid_id():
     from model.predict import predict_engine_by_id
+
     with pytest.raises(ValueError) as exc_info:
         predict_engine_by_id(9999, "FD001")
     assert "not found in FD001 test split" in str(exc_info.value)

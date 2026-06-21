@@ -1,10 +1,10 @@
 import pytest
-from data.load import load_config
+
 from app.components.aog_cost_simulator import (
     compute_failure_probability,
-    compute_aog_expected_cost,
     compute_maintenance_decision,
 )
+from data.load import load_config
 
 
 @pytest.fixture
@@ -38,7 +38,11 @@ def test_scenario_3_critical_high_risk(config):
     result = compute_maintenance_decision(0.85, 20, "Critical", config)
     assert result["urgency_level"] in ("HIGH", "CRITICAL")
     rec_lower = result["recommendation"].lower()
-    assert "preventive" in rec_lower or "maintenance" in rec_lower or "inspection" in rec_lower
+    assert (
+        "preventive" in rec_lower
+        or "maintenance" in rec_lower
+        or "inspection" in rec_lower
+    )
 
 
 def test_scenario_4_critical_act_now(config):
@@ -77,9 +81,9 @@ def test_failure_probability_monotonic(config):
     """Higher risk score must yield strictly higher failure probability."""
     prob_low = compute_failure_probability(0.1, config)
     prob_high = compute_failure_probability(0.5, config)
-    assert prob_high > prob_low, (
-        f"Expected P(0.5) > P(0.1) but got {prob_high:.4f} <= {prob_low:.4f}"
-    )
+    assert (
+        prob_high > prob_low
+    ), f"Expected P(0.5) > P(0.1) but got {prob_high:.4f} <= {prob_low:.4f}"
 
 
 # ---------------------------------------------------------------------------

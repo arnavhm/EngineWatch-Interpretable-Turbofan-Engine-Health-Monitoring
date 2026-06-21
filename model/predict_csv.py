@@ -5,6 +5,7 @@ applying PERSISTED transformers (scaler, PCA, KMeans, risk) loaded from disk.
 Distinct from model/predict.py, which runs the full re-fit pipeline for known
 CMAPSS engines. Read-only: no retraining, no mutation of artifacts.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,19 +13,19 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
+from app.utils.rul_artifacts import _load_rul_artifacts_uncached
 from data.load import load_config
 from data.preprocess import preprocess_test
 from features.health_index import apply_dual_health_index
-from features.velocity import compute_velocity
 from features.variability import compute_variability
+from features.velocity import compute_velocity
 from model.clustering import apply_clustering_per_fault_mode
-from model.risk import apply_risk_score_per_fault_mode
-from model.predict import _compute_rf_ci, FEATURE_COLUMNS
-from app.utils.rul_artifacts import _load_rul_artifacts_uncached
-
 # classify_engines lives in the fault-classification module — adjust this import
 # to its real location (you referenced it as classify_engines).
-from model.fault_classifier import classify_engines  # TODO: confirm module path
+from model.fault_classifier import \
+    classify_engines  # TODO: confirm module path
+from model.predict import FEATURE_COLUMNS, _compute_rf_ci
+from model.risk import apply_risk_score_per_fault_mode
 
 MIN_CYCLES = 20  # velocity/variability rolling window; last row needs >= this history
 
@@ -65,12 +66,16 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
     risk_by_fault = joblib.load(art_dir / "risk_artifacts_by_fault.joblib")
 
     # ── transform-only chain (no fit anywhere) ──
-    proc = preprocess_test(raw_df, config, scaler, persist_outputs=False)  # no disk side-effects
+    proc = preprocess_test(
+        raw_df, config, scaler, persist_outputs=False
+    )  # no disk side-effects
     hi = apply_dual_health_index(proc, pca_by_axis, hi_scaler_by_axis, config)
-    hi["health_index"] = hi["HI_hpc"]                             # legacy alias (build_health_index L663)
-    vel = compute_velocity(hi, config)                             # stateless slopes
-    var, _ = compute_variability(vel, config, artifacts=var_artifacts)  # persisted bounds
-    classified = classify_engines(var, fault_clf, config)          # persisted classifier
+    hi["health_index"] = hi["HI_hpc"]  # legacy alias (build_health_index L663)
+    vel = compute_velocity(hi, config)  # stateless slopes
+    var, _ = compute_variability(
+        vel, config, artifacts=var_artifacts
+    )  # persisted bounds
+    classified = classify_engines(var, fault_clf, config)  # persisted classifier
     clustered = apply_clustering_per_fault_mode(classified, cluster_by_fault)
     scored = apply_risk_score_per_fault_mode(clustered, cluster_by_fault, risk_by_fault)
 
@@ -84,11 +89,13 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
     results: list[dict] = []
     for engine_id, g in scored.groupby("unit"):
         if len(g) < MIN_CYCLES:
-            results.append({
-                "engine_id": int(engine_id),
-                "skipped": True,
-                "reason": f"only {len(g)} cycles; need >= {MIN_CYCLES} for velocity/variability",
-            })
+            results.append(
+                {
+                    "engine_id": int(engine_id),
+                    "skipped": True,
+                    "reason": f"only {len(g)} cycles; need >= {MIN_CYCLES} for velocity/variability",
+                }
+            )
             continue
 
         last = g.sort_values("cycle").iloc[[-1]]
@@ -99,19 +106,21 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
         if rf_model is not None and hasattr(rf_model, "estimators_"):
             ci_lower, ci_upper, ci_std = _compute_rf_ci(rf_model, feats.values, rul)
 
-        results.append({
-            "engine_id": int(engine_id),
-            "dataset_id": dataset_id,
-            "health_index": float(last["health_index"].iloc[0]),
-            "risk_score": float(last["risk_score"].iloc[0]),
-            "risk_state": str(last["risk_state"].iloc[0]),
-            "rul_cycles": rul,
-            "ci_lower": ci_lower,
-            "ci_upper": ci_upper,
-            "ci_std": ci_std,
-            "model_name": model_name,
-            "rmse": rmse,
-            "skipped": False,
-        })
+        results.append(
+            {
+                "engine_id": int(engine_id),
+                "dataset_id": dataset_id,
+                "health_index": float(last["health_index"].iloc[0]),
+                "risk_score": float(last["risk_score"].iloc[0]),
+                "risk_state": str(last["risk_state"].iloc[0]),
+                "rul_cycles": rul,
+                "ci_lower": ci_lower,
+                "ci_upper": ci_upper,
+                "ci_std": ci_std,
+                "model_name": model_name,
+                "rmse": rmse,
+                "skipped": False,
+            }
+        )
 
     return results

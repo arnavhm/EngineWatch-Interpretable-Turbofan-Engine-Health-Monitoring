@@ -3,13 +3,8 @@ from pathlib import Path
 import pytest
 
 from data.load import load_config, load_dataset
-from data.preprocess import (
-    apply_scaler,
-    compute_rul,
-    preprocess_test,
-    preprocess_train,
-    select_sensors,
-)
+from data.preprocess import (apply_scaler, compute_rul, preprocess_test,
+                             preprocess_train, select_sensors)
 
 
 def _test_config(tmp_path: Path) -> dict:

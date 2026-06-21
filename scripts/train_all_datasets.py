@@ -40,7 +40,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from data.load import load_config, load_dataset
 from data.preprocess import preprocess_test, preprocess_train
-from features.health_index import apply_dual_health_index, build_dual_health_index
+from features.health_index import (apply_dual_health_index,
+                                   build_dual_health_index)
 from features.variability import build_variability
 from features.velocity import build_velocity
 from model.clustering import build_clustering_per_fault_mode
@@ -238,7 +239,9 @@ def main() -> None:
             hi_artifact_dir / "hi_scaler_by_axis.joblib",
         )
         train_vel, test_vel, _ = build_velocity(train_hi, test_hi, config)
-        train_var, test_var, var_artifacts = build_variability(train_vel, test_vel, config)
+        train_var, test_var, var_artifacts = build_variability(
+            train_vel, test_vel, config
+        )
         joblib.dump(var_artifacts, hi_artifact_dir / "variability_artifacts.joblib")
 
         fault_artifacts = fit_fault_classifier(train_var, config)

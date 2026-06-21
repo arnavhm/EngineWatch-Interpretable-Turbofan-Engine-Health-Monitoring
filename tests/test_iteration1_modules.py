@@ -235,4 +235,6 @@ def test_artifact_loader_raises_when_no_artifact_available(
     )
 
     with pytest.raises(RuntimeError, match="Dashboard runtime does not retrain models"):
-        rul_artifacts_module.load_or_rebuild_rul_artifacts(dataset_id="nonexistent_dataset")
+        rul_artifacts_module.load_or_rebuild_rul_artifacts(
+            dataset_id="nonexistent_dataset"
+        )

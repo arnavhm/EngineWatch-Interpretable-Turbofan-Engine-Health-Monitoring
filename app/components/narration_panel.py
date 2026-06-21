@@ -12,13 +12,15 @@ import pandas as pd
 import streamlit as st
 
 from app.theme import SECTION_TITLE_CSS
-from app.utils.prompt_builder import build_gemini_chat_prompt
-from app.utils.nl_parser import handle_nl_query
 from app.utils.agentic_tools import get_agentic_tools
+from app.utils.nl_parser import handle_nl_query
+from app.utils.prompt_builder import build_gemini_chat_prompt
 from evaluation.validation import detect_anomalous_engines
 
 
-def fetch_gemini_narration(prompt: str, model_name: str, api_key: str, tools: list = None) -> str:
+def fetch_gemini_narration(
+    prompt: str, model_name: str, api_key: str, tools: list = None
+) -> str:
     """
     Purpose:       Call Gemini to fetch narrative, optionally executing tools.
     Input:         prompt (str), model_name (str), api_key (str), tools (list).
@@ -31,19 +33,16 @@ def fetch_gemini_narration(prompt: str, model_name: str, api_key: str, tools: li
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
-    
+
     if tools:
         chat = client.chats.create(
-            model=model_name,
-            config=types.GenerateContentConfig(tools=tools)
+            model=model_name, config=types.GenerateContentConfig(tools=tools)
         )
         response = chat.send_message(prompt)
         narrative = getattr(response, "text", None)
     else:
         response = client.models.generate_content(
-            model=model_name, 
-            contents=prompt,
-            config=types.GenerateContentConfig()
+            model=model_name, contents=prompt, config=types.GenerateContentConfig()
         )
         narrative = getattr(response, "text", None)
 
@@ -130,11 +129,11 @@ def _build_engine_context(
 
     pca = hi_pca_by_axis[axis_name]
     axis_cfg = config.get("health_index", {}).get("axes", {}).get(axis_name, {})
-    
-    axis_sensors = axis_cfg.get("by_dataset", {}).get(dataset_id, axis_cfg.get("sensors", []))
-    sensor_cols = [
-        sensor for sensor in axis_sensors if sensor in current_row.index
-    ]
+
+    axis_sensors = axis_cfg.get("by_dataset", {}).get(
+        dataset_id, axis_cfg.get("sensors", [])
+    )
+    sensor_cols = [sensor for sensor in axis_sensors if sensor in current_row.index]
 
     if not sensor_cols:
         raise KeyError("No matching sensor columns were found for attribution.")
@@ -142,11 +141,11 @@ def _build_engine_context(
     loadings = np.asarray(pca.components_[0], dtype=float)
     if len(loadings) != len(sensor_cols):
         raise ValueError("PCA loading shape does not match the sensor list.")
-        
+
     df_for_contrib = current_row.to_frame().T
     contrib_df = compute_sensor_contributions(df_for_contrib, pca, sensor_cols)
     contrib_last = contrib_df.iloc[-1]
-    
+
     sensor_contributions = {}
     for s in sensor_cols:
         col_name = f"{s}_contribution"
@@ -156,7 +155,9 @@ def _build_engine_context(
     abs_contribs = {k: abs(v) for k, v in sensor_contributions.items()}
     contribution_total = sum(abs_contribs.values()) or 1.0
 
-    sorted_sensors = sorted(abs_contribs.keys(), key=lambda k: abs_contribs[k], reverse=True)
+    sorted_sensors = sorted(
+        abs_contribs.keys(), key=lambda k: abs_contribs[k], reverse=True
+    )
     loading_dict = dict(zip(sensor_cols, loadings))
 
     top_sensors: dict[str, dict[str, float]] = {}
@@ -165,7 +166,7 @@ def _build_engine_context(
         loading = float(loading_dict[sensor_name])
         signed_contrib = float(sensor_contributions[sensor_name])
         share_pct = float(abs_contribs[sensor_name] / contribution_total * 100.0)
-        
+
         top_sensors[sensor_name] = {
             "rank": int(rank),
             "sensor_value": round(sensor_value, 4),
@@ -291,7 +292,9 @@ def render_narration_panel(
     model_name = config["dashboard"]["gemini_model_name"]
 
     try:
-        engine_context = _build_engine_context(current_row, config, artifacts, fleet_df, dataset_id)
+        engine_context = _build_engine_context(
+            current_row, config, artifacts, fleet_df, dataset_id
+        )
     except (KeyError, ValueError) as exc:
         st.warning(f"Narration unavailable: {exc}")
         return

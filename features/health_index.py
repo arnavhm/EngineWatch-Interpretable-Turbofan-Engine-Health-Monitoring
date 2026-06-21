@@ -23,14 +23,15 @@ Failure conditions:
     - If majority of engines show non - monotonic HI trends, emit a warning (HI may not correlate well with health).
 """
 
-import numpy as np
-import pandas as pd
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import MinMaxScaler
-from scipy.stats import spearmanr
 import warnings
 from dataclasses import dataclass, field
 from typing import Optional
+
+import numpy as np
+import pandas as pd
+from scipy.stats import spearmanr
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import MinMaxScaler
 
 
 @dataclass
@@ -102,7 +103,7 @@ def compute_sensor_contributions(
         raise KeyError(f"Sensor columns missing from engine_df: {missing}")
 
     loadings = pca.components_[0]
-    
+
     # Apply sign flip if the PCA was aligned during training
     if getattr(pca, "_hi_flip_sign", False):
         loadings = -loadings
@@ -739,7 +740,9 @@ def aggregate_module_contributions(
 
     out: dict[str, dict] = {}
     for module, sensors in module_map.items():
-        active = {s: sensor_contributions[s] for s in sensors if s in sensor_contributions}
+        active = {
+            s: sensor_contributions[s] for s in sensors if s in sensor_contributions
+        }
         signed = float(sum(active.values()))
         out[module] = {
             "signed_heat": signed,

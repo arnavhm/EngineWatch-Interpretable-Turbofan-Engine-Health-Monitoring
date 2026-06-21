@@ -17,7 +17,6 @@ from sklearn.preprocessing import StandardScaler
 
 from data.regime import RegimeScaler, fit_regime_scaler
 
-
 ScalerType = Union[StandardScaler, RegimeScaler]
 
 

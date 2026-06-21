@@ -150,15 +150,7 @@ def parse_p5_operating_expenses(df_p5: pd.DataFrame) -> pd.DataFrame:
         ]
 
     # If file already has explicit columns named as needed, try to select them
-    want = [
-        "CARRIER",
-        "AIRCRAFT_TYPE",
-        "YEAR",
-        "QUARTER",
-        "ENGINE_LABOR",
-        "ENGINE_MATERIALS",
-        "ENGINE_OUTSOURCED",
-    ]
+
     if set(["CARRIER", "AIRCRAFT_TYPE", "YEAR", "QUARTER"]).issubset(
         df.columns
     ) and any(

@@ -1,23 +1,32 @@
+
 import pytest
-import pandas as pd
-import numpy as np
+
 from data.load import load_config, load_dataset
-from data.preprocess import preprocess_train, preprocess_test
+from data.preprocess import preprocess_test, preprocess_train
 from features.health_index import build_health_index
-from features.velocity import build_velocity
 from features.variability import build_variability
+from features.velocity import build_velocity
 from model.clustering import build_clustering
 from model.risk import build_risk_score
 
-
 REQUIRED_TRAIN_COLUMNS = [
-    "unit", "cycle", "health_index", "HI_velocity",
-    "HI_variability", "risk_state", "risk_score",
+    "unit",
+    "cycle",
+    "health_index",
+    "HI_velocity",
+    "HI_variability",
+    "risk_state",
+    "risk_score",
 ]
 
 REQUIRED_TEST_COLUMNS = [
-    "unit", "cycle", "health_index", "HI_velocity",
-    "HI_variability", "risk_state", "risk_score",
+    "unit",
+    "cycle",
+    "health_index",
+    "HI_velocity",
+    "HI_variability",
+    "risk_state",
+    "risk_score",
 ]
 
 
@@ -79,18 +88,20 @@ def test_no_nan_in_test_features(fd001_pipeline_output):
 
 def test_health_index_range(fd001_pipeline_output):
     train_rs, test_rs = fd001_pipeline_output
-    assert train_rs["health_index"].between(0, 1).all(), \
-        "health_index out of [0,1] on train"
-    assert test_rs["health_index"].between(0, 1).all(), \
-        "health_index out of [0,1] on test"
+    assert (
+        train_rs["health_index"].between(0, 1).all()
+    ), "health_index out of [0,1] on train"
+    assert (
+        test_rs["health_index"].between(0, 1).all()
+    ), "health_index out of [0,1] on test"
 
 
 def test_risk_score_range(fd001_pipeline_output):
     train_rs, test_rs = fd001_pipeline_output
-    assert train_rs["risk_score"].between(0, 1).all(), \
-        "risk_score out of [0,1] on train"
-    assert test_rs["risk_score"].between(0, 1).all(), \
-        "risk_score out of [0,1] on test"
+    assert (
+        train_rs["risk_score"].between(0, 1).all()
+    ), "risk_score out of [0,1] on train"
+    assert test_rs["risk_score"].between(0, 1).all(), "risk_score out of [0,1] on test"
 
 
 def test_risk_state_valid_labels(fd001_pipeline_output):
@@ -98,20 +109,26 @@ def test_risk_state_valid_labels(fd001_pipeline_output):
     valid = {"Healthy", "Degrading", "Critical"}
     train_labels = set(train_rs["risk_state"].unique())
     test_labels = set(test_rs["risk_state"].unique())
-    assert train_labels <= valid, f"Invalid risk_state labels in train: {train_labels - valid}"
-    assert test_labels <= valid, f"Invalid risk_state labels in test: {test_labels - valid}"
+    assert (
+        train_labels <= valid
+    ), f"Invalid risk_state labels in train: {train_labels - valid}"
+    assert (
+        test_labels <= valid
+    ), f"Invalid risk_state labels in test: {test_labels - valid}"
 
 
 def test_engine_count_train(fd001_pipeline_output):
     train_rs, _ = fd001_pipeline_output
-    assert train_rs["unit"].nunique() == 100, \
-        f"Expected 100 train engines, got {train_rs['unit'].nunique()}"
+    assert (
+        train_rs["unit"].nunique() == 100
+    ), f"Expected 100 train engines, got {train_rs['unit'].nunique()}"
 
 
 def test_engine_count_test(fd001_pipeline_output):
     _, test_rs = fd001_pipeline_output
-    assert test_rs["unit"].nunique() == 100, \
-        f"Expected 100 test engines, got {test_rs['unit'].nunique()}"
+    assert (
+        test_rs["unit"].nunique() == 100
+    ), f"Expected 100 test engines, got {test_rs['unit'].nunique()}"
 
 
 def test_scaler_not_fit_on_test(fd001_pipeline_output):
@@ -122,8 +139,11 @@ def test_scaler_not_fit_on_test(fd001_pipeline_output):
     if sensor_cols:
         test_means = test_rs[sensor_cols].mean()
         # Test mean will not be exactly 0 — if it is, scaler was refit on test (bug)
-        assert not (test_means.abs() < 1e-10).all(), \
+        assert not (
+            test_means.abs() < 1e-10
+        ).all(), (
             "All test sensor means are 0.0 — scaler may have been refit on test data"
+        )
 
 
 def test_risk_score_state_agree(fd001_pipeline_output):
@@ -131,4 +151,6 @@ def test_risk_score_state_agree(fd001_pipeline_output):
     _, test_rs = fd001_pipeline_output
     last = test_rs.sort_values("cycle").groupby("unit").last()
     contradictions = last[(last.risk_score > 0.7) & (last.risk_state == "Healthy")]
-    assert len(contradictions) == 0, f"{len(contradictions)} engines high-risk but Healthy"
+    assert (
+        len(contradictions) == 0
+    ), f"{len(contradictions)} engines high-risk but Healthy"

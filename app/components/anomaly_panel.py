@@ -11,14 +11,15 @@ Usage:
     render_anomaly_panel(df, selected_engine_id=selected_engine_id)
 """
 
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
 from typing import Optional
 
-from evaluation.validation import detect_anomalous_engines
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
 from app.theme import SECTION_TITLE_CSS
 from app.utils.theme import STATE_COLORS, TOKENS, apply_plotly_theme
+from evaluation.validation import detect_anomalous_engines
 
 
 @st.cache_data

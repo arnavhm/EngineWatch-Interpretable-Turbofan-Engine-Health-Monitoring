@@ -34,7 +34,6 @@ from typing import Optional
 
 from model.predict import predict_fleet
 
-
 _VALID_DATASETS = {"FD001", "FD002", "FD003", "FD004"}
 
 
@@ -57,6 +56,7 @@ def _resolve_gemini_api_key() -> str:
     if not key:
         try:
             import streamlit as st  # noqa: PLC0415
+
             key = (st.secrets.get("GEMINI_API_KEY") or "").strip()
         except Exception:
             pass
@@ -79,6 +79,7 @@ def _gemini_model_name() -> str:
     """
     try:
         from data.load import load_config  # noqa: PLC0415
+
         cfg = load_config()
         return str(cfg["dashboard"]["gemini_model_name"])
     except Exception:
@@ -123,9 +124,9 @@ def build_fleet_facts(dataset_id: str) -> dict:
 
     raw_counts = fleet["risk_state"].value_counts().to_dict()
     state_counts = {
-        "Healthy":   int(raw_counts.get("Healthy",   0)),
+        "Healthy": int(raw_counts.get("Healthy", 0)),
         "Degrading": int(raw_counts.get("Degrading", 0)),
-        "Critical":  int(raw_counts.get("Critical",  0)),
+        "Critical": int(raw_counts.get("Critical", 0)),
     }
 
     top_critical = [
@@ -139,12 +140,12 @@ def build_fleet_facts(dataset_id: str) -> dict:
     ]
 
     return {
-        "dataset_id":  dataset_id,
-        "fleet_size":  int(len(fleet)),
+        "dataset_id": dataset_id,
+        "fleet_size": int(len(fleet)),
         "state_counts": state_counts,
-        "n_critical":  state_counts["Critical"],
-        "mean_rul":    round(float(fleet["rul_cycles"].mean()),   1),
-        "median_rul":  round(float(fleet["rul_cycles"].median()), 1),
+        "n_critical": state_counts["Critical"],
+        "mean_rul": round(float(fleet["rul_cycles"].mean()), 1),
+        "median_rul": round(float(fleet["rul_cycles"].median()), 1),
         "top_critical": top_critical,
     }
 
@@ -185,12 +186,11 @@ def narrate_handover(facts: dict) -> Optional[str]:
         return None
 
     try:
-        from google import genai          # noqa: PLC0415
-        from google.genai import types    # noqa: PLC0415
+        from google import genai  # noqa: PLC0415
+        from google.genai import types  # noqa: PLC0415
 
         prompt = (
-            f"{_HANDOVER_INSTRUCTION}\n\n"
-            f"Fleet data:\n{json.dumps(facts, indent=2)}"
+            f"{_HANDOVER_INSTRUCTION}\n\n" f"Fleet data:\n{json.dumps(facts, indent=2)}"
         )
 
         client = genai.Client(api_key=api_key)
