@@ -10,6 +10,7 @@ import SensorPanel from './components/SensorPanel';
 import AnomalyScatter from './components/AnomalyScatter';
 import CsvUpload from './components/CsvUpload';
 import EngineHealthMap from './components/EngineHealthMap';
+import SensorExplanationPanel from './components/SensorExplanationPanel';
 import { usePredict } from './hooks/usePredict';
 
 function Panel({ title, children, className = '' }: { title: string, children?: React.ReactNode, className?: string }) {
@@ -69,6 +70,9 @@ function App() {
           </Panel>
           <Panel title="SENSORS" className="md:col-span-2 lg:col-span-3">
             <SensorPanel engineId={selectedEngine} datasetId={selectedDataset} />
+          </Panel>
+          <Panel title="SENSOR EXPLANATION" className="md:col-span-2 lg:col-span-3">
+            <SensorExplanationPanel engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
           <Panel title="FLEET ANOMALY" className="md:col-span-2 lg:col-span-3">
             <AnomalyScatter datasetId={selectedDataset} />
