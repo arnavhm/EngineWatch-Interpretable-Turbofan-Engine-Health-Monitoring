@@ -34,6 +34,7 @@ class SensorMeta(TypedDict, total=False):
     signal_direction: Optional[str]  # "rising" | "falling" | None for inactive/ambiguous
     confirmed: bool        # True = monotonic RUL correlation confirmed in Phase 1
     explanation: str       # Plain English for maintenance personnel
+    layman_text: str       # One-sentence glance summary for non-experts
 
 
 SENSOR_METADATA: dict[str, SensorMeta] = {
@@ -62,6 +63,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "Informational: individual correlation is weaker than T30 or T50, "
             "but it contributes to the fan-axis health index."
         ),
+        "layman_text": "How hot the air is after the first (low-pressure) compressor. Drifts down a little as that compressor wears.",
     },
     "s3": {
         "symbol": "T30",
@@ -79,6 +81,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "A sustained rise at constant thrust is a direct indicator of "
             "compressor health deterioration."
         ),
+        "layman_text": "How hot the air is after the main (high-pressure) compressor. Climbs as the compressor wears — one of the clearest warning signs.",
     },
     "s4": {
         "symbol": "T50",
@@ -95,6 +98,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "in the exhaust. Confirmed strong correlation; elevated T50 also "
             "accelerates thermal fatigue in downstream components."
         ),
+        "layman_text": "Exhaust temperature leaving the turbine. Rises as the turbine wears and wastes more heat out the back.",
     },
     "s5": {
         "symbol": "P2",
@@ -114,7 +118,15 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
         "active": True,
         "signal_direction": None,   # Active but no confirmed monotonic direction
         "confirmed": False,
-        "explanation": "",
+        "explanation": (
+            "Air pressure in the bypass duct. Monitored for completeness, "
+            "but in this dataset it has no clear, repeatable trend with wear, "
+            "so it is not used as a degradation indicator."
+        ),
+        "layman_text": (
+            "Air pressure in the bypass duct. Watched but not a reliable "
+            "wear signal here, so it does not drive the health score."
+        ),
     },
     "s7": {
         "symbol": "P30",
@@ -131,6 +143,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "thrust. Confirmed monotonic trend; a rising P30 at constant "
             "thrust set-point is a direct measure of HPC margin erosion."
         ),
+        "layman_text": "Air pressure built up by the main compressor. Creeps up as the engine works harder to hold thrust.",
     },
     "s8": {
         "symbol": "Nf",
@@ -147,6 +160,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "thrust level means the fan is working harder to move the same "
             "mass of air — a confirmed sign of fan degradation."
         ),
+        "layman_text": "How fast the big front fan is spinning. Speeds up to make up for worn, less-efficient blades.",
     },
     "s9": {
         "symbol": "Nc",
@@ -163,6 +177,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "Informational: most degradation signal for the core is better "
             "captured by the corrected speed (NRc) and HPC temperatures."
         ),
+        "layman_text": "How fast the engine core is spinning. Held fairly steady by the controller, so it moves only a little.",
     },
     "s10": {
         "symbol": "epr",
@@ -189,6 +204,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "deviations from the expected Ps30–P30 relationship can indicate "
             "specific stage stall or compressor tip-clearance degradation."
         ),
+        "layman_text": "Wall pressure at the main compressor exit. Rises with wear, right alongside P30.",
     },
     "s12": {
         "symbol": "phi",
@@ -206,6 +222,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "this ratio falls. A steady decrease signals increasing HPC workload "
             "and is one of the cleaner individual indicators in FD001."
         ),
+        "layman_text": "Fuel used per unit of compressor pressure. Slides down as the compressor has to work harder for the same fuel.",
     },
     "s13": {
         "symbol": "NRf",
@@ -222,6 +239,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "the fan is spinning faster to compensate for efficiency loss — "
             "confirmed as one of the top degradation indicators in FD001."
         ),
+        "layman_text": "Fan speed adjusted for weather and altitude. A cleaner read on the fan working harder as it wears.",
     },
     "s14": {
         "symbol": "NRc",
@@ -239,6 +257,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "and temperatures; most useful in multi-condition datasets where "
             "regime normalisation separates throttle from degradation effects."
         ),
+        "layman_text": "Core speed adjusted for weather and altitude. Edges up as the core compensates for wear.",
     },
     "s15": {
         "symbol": "BPR",
@@ -255,6 +274,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "Confirmed: strong monotonic correlation with RUL, especially "
             "in single-condition datasets (FD001, FD003)."
         ),
+        "layman_text": "Share of air going around the core instead of through it. Drops as the fan loses efficiency.",
     },
     "s16": {
         "symbol": "farB",
@@ -282,6 +302,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "persistent rise indicates increasing thermal load on downstream "
             "cooling systems."
         ),
+        "layman_text": "Heat carried by the air bled off for cooling. Rises as the compressor runs hotter with wear.",
     },
     "s18": {
         "symbol": "Nf_dmd",
@@ -319,6 +340,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "more useful in multi-fault datasets (FD003, FD004) where HPT "
             "degradation is explicitly modelled."
         ),
+        "layman_text": "Cooling air sent to the high-pressure turbine. Shifts as turbine blades age and need more cooling.",
     },
     "s21": {
         "symbol": "W32",
@@ -335,6 +357,7 @@ SENSOR_METADATA: dict[str, SensorMeta] = {
             "correlation is weak, but W32 complements T50 when diagnosing "
             "LPT-specific degradation modes."
         ),
+        "layman_text": "Cooling air sent to the low-pressure turbine. Tracks the turbine's heat load as it ages.",
     },
 }
 
@@ -371,4 +394,26 @@ SENSOR_CATALOG: dict[str, dict] = {
     }
     for k, v in SENSOR_METADATA.items()
     if v["active"] and v.get("signal_direction") is not None
+}
+
+
+# ---------------------------------------------------------------------------
+# SYMBOL_TO_META — keyed by sensor SYMBOL (T24, T30, …) for the /sensors API.
+# The /sensors cache is keyed by symbol; this lets the route attach
+# human-readable metadata to each symbol-keyed value array at request time.
+# Active sensors only. Module resolved to display name (phi → Combustor).
+# ---------------------------------------------------------------------------
+
+SYMBOL_TO_META: dict[str, dict] = {
+    v["symbol"]: {
+        "descriptive_name": v["description"],
+        "layman_text": v.get("layman_text", ""),
+        "explanation": v.get("explanation", ""),
+        "units": v["units"],
+        "signal_direction": v.get("signal_direction"),
+        "confirmed": v.get("confirmed", False),
+        "module": v.get("module_display") or MODULE_DISPLAY_NAMES.get(v["module"], v["module"]),
+    }
+    for v in SENSOR_METADATA.values()
+    if v["active"]
 }

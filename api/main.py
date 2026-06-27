@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Query
 from api.schemas import (EnginePrediction, FleetEngine, FleetHandover,
                          FleetSummary)
 from model.fleet_report import build_fleet_facts, narrate_handover
+from model.sensor_metadata import SYMBOL_TO_META
 
 _predict_cache: dict[str, dict] = {}
 _fleet_summary_cache: dict[str, dict] = {}
@@ -116,9 +117,27 @@ async def get_trajectory(engine_id: int, dataset_id: str = "FD001"):
 @app.get("/sensors")
 async def get_sensors(engine_id: int, dataset_id: str = "FD001"):
     key = f"{dataset_id}:{engine_id}"
-    if key in _sensor_cache:
-        return _sensor_cache[key]
-    raise HTTPException(status_code=404, detail="Engine not found")
+    if key not in _sensor_cache:
+        raise HTTPException(status_code=404, detail="Engine not found")
+
+    cached = _sensor_cache[key]
+    raw_sensors = cached.get("sensors", {})
+
+    # Attach human-readable metadata at request time. Cache stays pure data;
+    # SYMBOL_TO_META is static config, so wording edits deploy with a restart,
+    # never a cache rebuild. Symbols absent from metadata fall back to bare
+    # values so an unknown key never 500s.
+    enriched: dict[str, dict] = {}
+    for symbol, values in raw_sensors.items():
+        meta = SYMBOL_TO_META.get(symbol, {})
+        enriched[symbol] = {"values": values, **meta}
+
+    return {
+        "engine_id": cached.get("engine_id", engine_id),
+        "dataset_id": cached.get("dataset_id", dataset_id),
+        "cycles": cached.get("cycles", []),
+        "sensors": enriched,
+    }
 
 
 @app.get("/anomaly")
