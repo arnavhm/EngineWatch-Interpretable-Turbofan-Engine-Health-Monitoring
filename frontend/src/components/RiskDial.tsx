@@ -113,6 +113,13 @@ export default function RiskDial({ data, loading }: RiskDialProps) {
               </div>
             </div>
 
+            <div className="flex flex-col items-center mt-4">
+              <span className="text-sm font-bold text-text">RUL: {data.rul_cycles.toFixed(1)} cy</span>
+              <span className="text-[10px] text-muted mt-1 text-center px-2" title={data.model_name === 'gradient_boosting' ? 'Monotonic HistGradientBoostingRegressor' : data.model_name}>
+                Model: {data.model_name === 'gradient_boosting' ? 'Monotonic HistGradientBoostingRegressor' : data.model_name}
+              </span>
+            </div>
+
             <div className="flex gap-4 mt-6">
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-healthy"></div>

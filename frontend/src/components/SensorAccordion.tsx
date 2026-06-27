@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceArea } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceArea, Tooltip } from 'recharts';
 import { useSensors } from '../hooks/useSensors';
 import { useContributions } from '../hooks/useContributions';
 import PanelState from './PanelState';
@@ -22,6 +22,20 @@ export default function SensorAccordion({ engineId, datasetId }: SensorAccordion
   const { data: cData, loading: cLoading, error: cError } = useContributions(engineId, datasetId);
 
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-panel2 border border-border p-2 rounded shadow-md text-xs font-mono">
+          <p className="text-muted mb-1">Cycle: {label}</p>
+          <p className="text-text">
+            Value: <span className="text-accent font-bold">{payload[0].value.toPrecision(5)}</span>
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const toggle = (key: string) => {
     const next = new Set(expandedKeys);
@@ -121,6 +135,7 @@ export default function SensorAccordion({ engineId, datasetId }: SensorAccordion
                         stroke="var(--color-muted)"
                         tick={{ fill: 'var(--color-muted)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
                       />
+                      <Tooltip content={<CustomTooltip />} />
                       
                       <ReferenceArea x1={lateLifeStartCycle} x2={maxCycle} fill="rgba(255,255,255,0.03)" />
                       
