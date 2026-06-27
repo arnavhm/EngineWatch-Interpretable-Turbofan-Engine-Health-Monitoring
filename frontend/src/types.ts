@@ -40,11 +40,22 @@ export interface TrajectoryResponse {
   variability: number[];
 }
 
+export interface SensorMetadata {
+  values: number[];
+  descriptive_name: string;
+  layman_text: string;
+  explanation: string;
+  units: string;
+  signal_direction: string;
+  confirmed: boolean;
+  module: string;
+}
+
 export interface SensorResponse {
   engine_id: number;
   dataset_id: string;
   cycles: number[];
-  sensors: Record<string, number[]>;
+  sensors: Record<string, SensorMetadata>;
 }
 
 export interface AnomalyPoint {

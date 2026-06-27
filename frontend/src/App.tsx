@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import TopBar from './components/TopBar';
 import Selector from './components/Selector';
-import MetricStrip from './components/MetricStrip';
 import RiskDial from './components/RiskDial';
 import FleetSummary from './components/FleetSummary';
 import TopRiskTable from './components/TopRiskTable';
 import TrajectoryPanel from './components/TrajectoryPanel';
-import SensorPanel from './components/SensorPanel';
 import AnomalyScatter from './components/AnomalyScatter';
 import CsvUpload from './components/CsvUpload';
 import EngineHealthMap from './components/EngineHealthMap';
-import SensorExplanationPanel from './components/SensorExplanationPanel';
+import EngineStatusVerdict from './components/EngineStatusVerdict';
+import SensorAccordion from './components/SensorAccordion';
+import VelocityPanel from './components/VelocityPanel';
+import VariabilityPanel from './components/VariabilityPanel';
 import { usePredict } from './hooks/usePredict';
 
 function Panel({ title, children, className = '' }: { title: string, children?: React.ReactNode, className?: string }) {
@@ -33,7 +34,7 @@ function Panel({ title, children, className = '' }: { title: string, children?: 
 function App() {
   const [selectedDataset, setSelectedDataset] = useState<string>("FD001");
   const [selectedEngine, setSelectedEngine] = useState<number>(34);
-  const { data: engineData, loading: engineLoading, error: engineError } = usePredict(selectedEngine, selectedDataset);
+  const { data: engineData, loading: engineLoading } = usePredict(selectedEngine, selectedDataset);
 
   return (
     <div className="min-h-screen bg-bg text-text font-sans flex flex-col overflow-x-hidden">
@@ -50,33 +51,43 @@ function App() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
-          <Panel title="Engine Status" className="md:col-span-2 lg:col-span-3">
-            <MetricStrip data={engineData} loading={engineLoading} error={engineError} />
-          </Panel>
+          <div className="md:col-span-2 lg:col-span-3">
+            <EngineStatusVerdict engineId={selectedEngine} datasetId={selectedDataset} />
+          </div>
+
           <Panel title="Risk Dial" className="col-span-1">
             <RiskDial data={engineData} loading={engineLoading} />
           </Panel>
           <Panel title="Engine Health Map" className="md:col-span-1 lg:col-span-2">
             <EngineHealthMap engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
-          <Panel title="Fleet Summary" className="md:col-span-1 lg:col-span-2">
+
+          <Panel title="Degradation Velocity" className="col-span-1 lg:col-span-1">
+            <VelocityPanel engineId={selectedEngine} datasetId={selectedDataset} />
+          </Panel>
+          <Panel title="Health Variability" className="col-span-1 lg:col-span-1">
+            <VariabilityPanel engineId={selectedEngine} datasetId={selectedDataset} />
+          </Panel>
+          <Panel title="Fleet Summary" className="md:col-span-1 lg:col-span-1">
             <FleetSummary datasetId={selectedDataset} onSelectEngine={setSelectedEngine} />
           </Panel>
-          <Panel title="Top Risk" className="md:col-span-2 lg:col-span-3">
-            <TopRiskTable datasetId={selectedDataset} selectedEngine={selectedEngine} onSelectEngine={setSelectedEngine} />
-          </Panel>
+
           <Panel title="HEALTH TRAJECTORY" className="md:col-span-2 lg:col-span-3">
             <TrajectoryPanel engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
+
           <Panel title="SENSORS" className="md:col-span-2 lg:col-span-3">
-            <SensorPanel engineId={selectedEngine} datasetId={selectedDataset} />
+            <SensorAccordion engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
-          <Panel title="SENSOR EXPLANATION" className="md:col-span-2 lg:col-span-3">
-            <SensorExplanationPanel engineId={selectedEngine} datasetId={selectedDataset} />
+          
+          <Panel title="Top Risk" className="md:col-span-2 lg:col-span-3">
+            <TopRiskTable datasetId={selectedDataset} selectedEngine={selectedEngine} onSelectEngine={setSelectedEngine} />
           </Panel>
+
           <Panel title="FLEET ANOMALY" className="md:col-span-2 lg:col-span-3">
             <AnomalyScatter datasetId={selectedDataset} />
           </Panel>
+          
           <Panel title="CSV BATCH PREDICT" className="md:col-span-2 lg:col-span-3">
             <CsvUpload />
           </Panel>
