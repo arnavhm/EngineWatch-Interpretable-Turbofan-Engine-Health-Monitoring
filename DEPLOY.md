@@ -17,6 +17,31 @@ The 2GB droplet cannot run the pipeline training. If data or models change:
 2. Force-add the `.pkl` caches (`git add -f models/*.pkl`).
 3. Commit and push. The droplet receives them via `git pull`.
 
+## RUL Model Artifact Deployment (rsync, NOT git)
+
+`models/{dataset_id}/rul_artifacts.joblib` bundles (contain an unbounded-depth
+RandomForest used for confidence intervals — 100-330MB each) exceed GitHub's
+100MB push limit and are `.gitignore`'d. They are deployed directly via rsync,
+separately from the normal `git pull` backend-change flow.
+
+After running `scripts/train_rul_artifacts.py {dataset_id}` locally and
+confirming the canonical gate passes:
+
+```bash
+for ds in FD001 FD002 FD003 FD004; do
+  rsync -avz --progress \
+    "models/${ds}/rul_artifacts.joblib" \
+    "root@168.144.95.207:/root/EngineWatch-Interpretable-Turbofan-Engine-Health-Monitoring/models/${ds}/rul_artifacts.joblib"
+done
+systemctl restart enginewatch  # on droplet, after rsync completes
+```
+
+The smaller per-dataset artifacts (hi_pca_by_axis.joblib, hi_scaler_by_axis.joblib,
+variability_artifacts.joblib, fault_classifier.joblib, cluster_models_by_fault.joblib,
+risk_artifacts_by_fault.joblib, scaler_{id}.joblib) and the four
+fleet/trajectory/sensor/anomaly_cache_{id}.pkl files remain git-tracked as
+before — only the RUL bundle itself moved to this out-of-band path.
+
 ## Frontend change (React)
 
 ```bash
