@@ -52,10 +52,8 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import (HistGradientBoostingRegressor,
-                              RandomForestRegressor)
-from sklearn.inspection import \
-    permutation_importance as sklearn_perm_importance
+from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.inspection import permutation_importance as sklearn_perm_importance
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 
@@ -478,8 +476,11 @@ def _save_artifacts(artifacts: RULArtifacts, save_path: str) -> None:
     path = Path(save_path)
     path.mkdir(parents=True, exist_ok=True)
 
-    # Save individual models
+    # Save individual models except the Random Forest, which is already
+    # available inside the bundled RUL artifacts object.
     for name, model in artifacts.all_models.items():
+        if name == "random_forest":
+            continue
         joblib.dump(model, path / f"rul_{name}.joblib")
 
     # Save the entire artifacts object for easy loading in dashboard

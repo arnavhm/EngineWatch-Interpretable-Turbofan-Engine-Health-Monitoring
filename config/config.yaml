@@ -131,6 +131,7 @@ regimes:
   n_regimes: 1
   silhouette_min_threshold: 0.30
   enforce_silhouette_gate: true
+  silhouette_sample_size: 5000
   setting_cols:
     - op_setting_1
     - op_setting_2

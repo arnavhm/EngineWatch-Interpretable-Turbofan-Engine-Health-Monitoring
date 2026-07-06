@@ -24,55 +24,55 @@ _anomaly_cache: dict[str, list] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        dataset_id = "FD001"
+    for dataset_id in ["FD001", "FD002", "FD003", "FD004"]:
+        try:
+            cache_path = (
+                Path(__file__).resolve().parent.parent
+                / "models"
+                / f"fleet_cache_{dataset_id}.pkl"
+            )
+            fleet_cache = joblib.load(cache_path)
 
-        cache_path = (
-            Path(__file__).resolve().parent.parent
-            / "models"
-            / f"fleet_cache_{dataset_id}.pkl"
-        )
-        fleet_cache = joblib.load(cache_path)
+            _predict_cache.update(
+                {
+                    f"{dataset_id}:{eid}": result
+                    for eid, result in fleet_cache["per_engine"].items()
+                }
+            )
+            _fleet_summary_cache[dataset_id] = fleet_cache["fleet_summary"]
+            _fleet_top_risk_cache[dataset_id] = fleet_cache["top_risk"]
 
-        _predict_cache.update(
-            {
-                f"FD001:{eid}": result
-                for eid, result in fleet_cache["per_engine"].items()
-            }
-        )
-        _fleet_summary_cache["FD001"] = fleet_cache["fleet_summary"]
-        _fleet_top_risk_cache["FD001"] = fleet_cache["top_risk"]
+            traj_cache_path = (
+                Path(__file__).resolve().parent.parent
+                / "models"
+                / f"trajectory_cache_{dataset_id}.pkl"
+            )
+            trajectory_cache = joblib.load(traj_cache_path)
+            _trajectory_cache.update(
+                {f"{dataset_id}:{eid}": traj for eid, traj in trajectory_cache.items()}
+            )
 
-        traj_cache_path = (
-            Path(__file__).resolve().parent.parent
-            / "models"
-            / f"trajectory_cache_{dataset_id}.pkl"
-        )
-        trajectory_cache = joblib.load(traj_cache_path)
-        _trajectory_cache.update(
-            {f"FD001:{eid}": traj for eid, traj in trajectory_cache.items()}
-        )
+            sensor_cache_path = (
+                Path(__file__).resolve().parent.parent
+                / "models"
+                / f"sensor_cache_{dataset_id}.pkl"
+            )
+            sensor_cache = joblib.load(sensor_cache_path)
+            _sensor_cache.update(
+                {f"{dataset_id}:{eid}": data for eid, data in sensor_cache.items()}
+            )
 
-        sensor_cache_path = (
-            Path(__file__).resolve().parent.parent
-            / "models"
-            / f"sensor_cache_{dataset_id}.pkl"
-        )
-        sensor_cache = joblib.load(sensor_cache_path)
-        _sensor_cache.update(
-            {f"FD001:{eid}": data for eid, data in sensor_cache.items()}
-        )
+            anomaly_cache_path = (
+                Path(__file__).resolve().parent.parent
+                / "models"
+                / f"anomaly_cache_{dataset_id}.pkl"
+            )
+            _anomaly_cache[dataset_id] = joblib.load(anomaly_cache_path)
 
-        anomaly_cache_path = (
-            Path(__file__).resolve().parent.parent
-            / "models"
-            / f"anomaly_cache_{dataset_id}.pkl"
-        )
-        _anomaly_cache["FD001"] = joblib.load(anomaly_cache_path)
-
-        print("[startup] All caches loaded — zero compute at runtime")
-    except Exception as e:
-        print(f"[startup] Pre-warm failed: {e}")
+        except Exception as e:
+            print(f"[startup] Pre-warm failed for {dataset_id}: {e}")
+            
+    print("[startup] All caches loaded — zero compute at runtime")
     yield
 
 

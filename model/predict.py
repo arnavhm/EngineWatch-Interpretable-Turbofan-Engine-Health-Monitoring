@@ -95,7 +95,7 @@ def predict_engine_by_id(engine_id: int, dataset_id: str = "FD001") -> dict:
     Assumptions: engine_id exists in the dataset's test split
     Failure:     ValueError if engine_id not found in the dataset
     """
-    _, test_df = load_pipeline_data_uncached(dataset_id)
+    _, test_df, _ = load_pipeline_data_uncached(dataset_id)
     engine_df = test_df[test_df["unit"] == engine_id]
     if engine_df.empty:
         raise ValueError(f"Engine {engine_id} not found in {dataset_id} test split")
@@ -115,7 +115,7 @@ def predict_fleet(dataset_id: str = "FD001") -> pd.DataFrame:
     Assumptions: pipeline produces FEATURE_COLUMNS + risk_state + unit on test split
     Failure:     FileNotFoundError if artifacts/raw data missing
     """
-    _, test_df = load_pipeline_data_uncached(dataset_id)
+    _, test_df, _ = load_pipeline_data_uncached(dataset_id)
 
     # last cycle per engine (CMAPSS inference convention)
     last = test_df.sort_values("cycle").groupby("unit").last().reset_index()
@@ -164,7 +164,7 @@ def get_engine_contributions(engine_id: int, dataset_id: str) -> dict | None:
     except Exception:
         return None
 
-    _, test_df = load_pipeline_data_uncached(dataset_id)
+    _, test_df, _ = load_pipeline_data_uncached(dataset_id)
     engine_df = test_df[test_df["unit"] == engine_id]
 
     if engine_df.empty:

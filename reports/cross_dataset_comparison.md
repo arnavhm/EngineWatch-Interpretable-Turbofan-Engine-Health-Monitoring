@@ -66,7 +66,7 @@ Result: FD004 NASA score [RETIRED — see canonical table].
 | Dataset | Best model            | RMSE   | NASA   | risk-RUL Spearman |
 |---------|-----------------------|--------|--------|-------------------|
 | FD001   | HistGBR (monotonic)   | 18.459 | 617.5  | −0.750            |
-| FD002   | RandomForest          | 31.125 | 13,635 | −0.765            |
+| FD002   | HistGBR (monotonic)   | 31.125 | 13,635 | −0.765            |
 | FD003   | HistGBR (monotonic)   | 22.798 | 1,995.7| −0.816            |
 | FD004   | HistGBR (monotonic)   | 34.410 | 53,028 | −0.736            |
 

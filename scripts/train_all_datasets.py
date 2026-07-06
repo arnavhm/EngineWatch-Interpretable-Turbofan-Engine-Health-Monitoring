@@ -133,33 +133,21 @@ def _dataset_config(base_config: dict, dataset_id: str) -> dict:
     Failure conditions:
         KeyError from missing required config fields.
     """
-    config = copy.deepcopy(base_config)
-
+    from data.regime import resolve_regime_config
+    config = resolve_regime_config(base_config, dataset_id)
     config["dataset_id"] = dataset_id
     config["dataset"]["name"] = dataset_id
     config["dataset"]["train_file"] = f"train_{dataset_id}.txt"
     config["dataset"]["test_file"] = f"test_{dataset_id}.txt"
     config["dataset"]["rul_file"] = f"RUL_{dataset_id}.txt"
-
     config["scaler_path"] = str(Path("models") / f"scaler_{dataset_id}.joblib")
-
     save_root = Path(config["rul"]["save_path"])
     config["rul"]["save_path"] = str(save_root / dataset_id)
-
-    regime_cfg = config.get("regimes", {})
-    if regime_cfg.get("enabled", False):
-        by_dataset = regime_cfg.get("by_dataset", {})
-        if dataset_id not in by_dataset:
-            raise KeyError(f"Missing config key: regimes.by_dataset.{dataset_id}")
-        regime_cfg["n_regimes"] = int(by_dataset[dataset_id])
-
-    # Apply dataset overrides for health index axes
     hi_axes = config.get("health_index", {}).get("axes", {})
     for axis_name, axis_cfg in hi_axes.items():
         axis_by_dataset = axis_cfg.get("by_dataset", {})
         if dataset_id in axis_by_dataset:
             axis_cfg["sensors"] = axis_by_dataset[dataset_id]
-
     return config
 
 

@@ -20,19 +20,19 @@ MODEL_DISPLAY_NAMES = {
 
 
 @st.cache_resource
-def _load_rul_artifacts() -> Any:
+def _load_rul_artifacts(dataset_id: str = "FD001") -> Any:
     """Load pre-trained RUL artifacts for dashboard display."""
-    return load_or_rebuild_rul_artifacts()
+    return load_or_rebuild_rul_artifacts(dataset_id)
 
 
-def render_model_evaluation() -> None:
+def render_model_evaluation(dataset_id: str = "FD001") -> None:
     """Render the Model Evaluation panel at the bottom of the dashboard."""
     st.markdown(
         '<p style="font-size: 1.35rem; font-weight: 700; margin-bottom: 0.5rem;">📊 Model Evaluation</p>',
         unsafe_allow_html=True,
     )
 
-    artifacts = _load_rul_artifacts()
+    artifacts = _load_rul_artifacts(dataset_id)
     metrics = artifacts.evaluation_metrics
     best_model_key = artifacts.best_model_name
 

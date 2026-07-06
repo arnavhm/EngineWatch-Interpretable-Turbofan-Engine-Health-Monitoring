@@ -18,7 +18,7 @@ def _project_root() -> Path:
 
 
 def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
-    """Return artifact paths from config first, then known legacy locations."""
+    """Return artifact paths from config."""
     root = _project_root()
 
     configured_dir = Path(config["rul"]["save_path"])
@@ -27,20 +27,7 @@ def _candidate_artifact_paths(config: dict[str, Any]) -> list[Path]:
     else:
         configured_path = root / configured_dir / "rul_artifacts.joblib"
 
-    # Legacy notebooks location from earlier project iterations.
-    legacy_notebooks_path = root / "notebooks" / "models" / "rul_artifacts.joblib"
-
-    candidates = [configured_path.resolve(), legacy_notebooks_path.resolve()]
-
-    # De-duplicate while preserving configured path priority.
-    unique_candidates: list[Path] = []
-    seen: set[Path] = set()
-    for candidate in candidates:
-        if candidate not in seen:
-            unique_candidates.append(candidate)
-            seen.add(candidate)
-
-    return unique_candidates
+    return [configured_path.resolve()]
 
 
 def _load_rul_artifacts_uncached(dataset_id: str = "FD001") -> Any:
@@ -54,38 +41,22 @@ def _load_rul_artifacts_uncached(dataset_id: str = "FD001") -> Any:
     """
     config = load_config()
     config["dataset_id"] = dataset_id
-    load_errors: list[str] = []
-
     # Try dataset-specific artifacts first (models/FD001/, models/FD002/, etc.)
     artifact_name = os.environ.get("RUL_ARTIFACT_NAME", "rul_artifacts.joblib")
     dataset_artifact_dir = Path(_project_root()) / "models" / dataset_id / artifact_name
     if dataset_artifact_dir.exists():
-        try:
-            return joblib.load(dataset_artifact_dir)
-        except Exception as error:
-            load_errors.append(f"{dataset_artifact_dir}: {error}")
+        return joblib.load(dataset_artifact_dir)
 
     for path in _candidate_artifact_paths(config):
-        if not path.exists():
-            continue
-        try:
+        if path.exists():
             return joblib.load(path)
-        except Exception as error:
-            load_errors.append(f"{path}: {error}")
-            continue
 
-    candidate_paths = [str(path) for path in _candidate_artifact_paths(config)]
-    error_details = (
-        "\n".join(load_errors)
-        if load_errors
-        else "No candidate artifact file could be loaded."
-    )
-    raise RuntimeError(
+    candidate_paths = [str(dataset_artifact_dir)] + [str(path) for path in _candidate_artifact_paths(config)]
+    raise FileNotFoundError(
         "Unable to load RUL artifacts for dashboard inference.\n"
         "Dashboard runtime does not retrain models.\n"
         "Run offline training first: python scripts/train_rul_artifacts.py\n"
-        f"Searched paths: {candidate_paths}\n"
-        f"Load errors: {error_details}"
+        f"Searched paths: {candidate_paths}"
     )
 
 

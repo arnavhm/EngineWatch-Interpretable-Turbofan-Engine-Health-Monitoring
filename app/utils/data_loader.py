@@ -19,16 +19,18 @@ def get_cached_dataset(dataset_id: str, config: dict) -> tuple:
 
 def load_pipeline_data_uncached(
     dataset_id: str = "FD001",
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, "RegimeScaler"]:
     """
     Purpose:     Pure pipeline run for a CMAPSS dataset — no Streamlit, no caching.
                  Importable from any context (FastAPI, scripts, tests).
     Input:       dataset_id — one of FD001–FD004
-    Output:      (train_df, test_df) with all pipeline columns incl. risk_state, risk_score
+    Output:      (train_df, test_df, scaler) with all pipeline columns incl. risk_state, risk_score
     Assumptions: Raw data files present for dataset_id
     Failure:     FileNotFoundError if raw files missing; KeyError on malformed config
     """
-    config = load_config()
+    from data.regime import resolve_regime_config
+    
+    config = resolve_regime_config(load_config(), dataset_id)
     config["dataset_id"] = dataset_id
     config["dataset"]["name"] = dataset_id
     config["dataset"]["train_file"] = f"train_{dataset_id}.txt"
@@ -69,10 +71,11 @@ def load_pipeline_data_uncached(
         train_cl, test_cl, clusterers_by_mode
     )
 
-    return train_rs, test_rs
+    return train_rs, test_rs, scaler
 
 
 @st.cache_data
-def load_pipeline_data(dataset_id: str = "FD001") -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Streamlit-cached wrapper. Dashboard entry point — behavior unchanged."""
-    return load_pipeline_data_uncached(dataset_id)
+def load_pipeline_data(dataset_id: str = "FD001") -> tuple[pd.DataFrame, pd.DataFrame, "Any"]:
+    """Streamlit-cached wrapper. Dashboard entry point."""
+    train_rs, test_rs, scaler = load_pipeline_data_uncached(dataset_id)
+    return train_rs, test_rs, scaler

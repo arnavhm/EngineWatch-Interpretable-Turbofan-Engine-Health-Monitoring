@@ -13,6 +13,7 @@ Assumptions:
 
 from __future__ import annotations
 
+import copy
 import warnings
 from typing import Optional, Union
 
@@ -43,12 +44,16 @@ class RegimeScaler:
         random_state: int = 42,
         silhouette_min_threshold: float = 0.30,
         enforce_silhouette_gate: bool = True,
+        silhouette_sample_size: int = 5000,
     ) -> None:
         """
         Purpose    : Initialise with regime count and operating condition column names.
         Input      : n_regimes    — number of flight regimes (1 = single-condition dataset).
                      setting_cols — operational setting column names used for KMeans clustering.
                      random_state — KMeans random seed for reproducibility.
+                     silhouette_sample_size: caps the silhouette computation to this many
+                     rows regardless of dataset size. Unbounded silhouette_score() on a
+                     dense pairwise distance matrix is O(n^2) memory.
         Output     : Unfitted RegimeScaler instance.
         Assumptions: n_regimes matches the dataset's actual operating condition count.
         Failure    : ValueError if n_regimes < 1.
@@ -63,6 +68,7 @@ class RegimeScaler:
         self._sensor_cols: Optional[list[str]] = None
         self._silhouette_min_threshold = float(silhouette_min_threshold)
         self._enforce_silhouette_gate = bool(enforce_silhouette_gate)
+        self._silhouette_sample_size = int(silhouette_sample_size)
 
     # ------------------------------------------------------------------
     # Sklearn-compatible properties
@@ -141,7 +147,13 @@ class RegimeScaler:
 
             label_counts = np.bincount(regime_labels, minlength=self._n_regimes)
             label_pct = (label_counts / label_counts.sum()) * 100.0
-            silhouette = silhouette_score(df[self._setting_cols], regime_labels)
+            sample_n = min(len(df), self._silhouette_sample_size)
+            silhouette = silhouette_score(
+                df[self._setting_cols],
+                regime_labels,
+                sample_size=sample_n,
+                random_state=self._random_state,
+            )
             print(
                 "[REGIME] KMeans silhouette: "
                 f"{silhouette:.4f} (min required: {self._silhouette_min_threshold:.2f})"
@@ -249,6 +261,60 @@ class RegimeScaler:
             )
         return self._scalers[0].transform(X)
 
+    def inverse_transform_df(self, df: pd.DataFrame, sensor_cols: list[str]) -> pd.DataFrame:
+        """
+        Purpose    : Invert per-regime standardization back to physical sensor
+                     units. Mirrors transform_df's dispatch exactly.
+        Input      : df — sensor_cols already scaled by this RegimeScaler, PLUS
+                     the original setting_cols still present (transform_df drops
+                     them — call this BEFORE that drop, or re-join setting_cols
+                     by unit/cycle first).
+        Output     : DataFrame with sensor_cols restored to physical scale.
+        Failure    : RuntimeError if unfitted. KeyError if setting_cols missing
+                     when n_regimes > 1.
+        """
+        if not self._scalers:
+            raise RuntimeError("RegimeScaler has not been fitted yet.")
+        result = df.copy()
+        result[sensor_cols] = result[sensor_cols].astype(float)
+        if self._n_regimes == 1:
+            result[sensor_cols] = self._scalers[0].inverse_transform(df[sensor_cols])
+            return result
+        missing = [c for c in self._setting_cols if c not in df.columns]
+        if missing:
+            raise KeyError(f"setting_cols required for regime dispatch but missing: {missing}")
+        regime_labels = self._kmeans.predict(df[self._setting_cols])
+        for regime_id, regime_scaler in self._scalers.items():
+            mask = regime_labels == regime_id
+            if mask.any():
+                result.loc[mask, sensor_cols] = regime_scaler.inverse_transform(df.loc[mask, sensor_cols])
+        return result
+
+
+def resolve_regime_config(config: dict, dataset_id: str) -> dict:
+    """
+    Purpose:      Return a config copy with regimes.n_regimes overridden from
+                  regimes.by_dataset[dataset_id]. This is the ONLY place this
+                  override should happen — both train_all_datasets.py and
+                  data_loader.py must call this instead of each maintaining
+                  their own inline copy of the same logic.
+    Input:        config — full loaded config dict (not yet dataset-specific).
+                  dataset_id — one of FD001-FD004.
+    Output:       Deep-copied config with config["regimes"]["n_regimes"] set
+                  correctly for dataset_id. No-op copy if regimes disabled.
+    Assumptions:  config["regimes"]["by_dataset"][dataset_id] exists when
+                  regimes.enabled is True.
+    Failure:      KeyError if by_dataset is missing dataset_id.
+    """
+    result = copy.deepcopy(config)
+    regime_cfg = result.get("regimes", {})
+    if regime_cfg.get("enabled", False):
+        by_dataset = regime_cfg.get("by_dataset", {})
+        if dataset_id not in by_dataset:
+            raise KeyError(f"Missing config key: regimes.by_dataset.{dataset_id}")
+        regime_cfg["n_regimes"] = int(by_dataset[dataset_id])
+    return result
+
 
 def fit_regime_scaler(
     df: pd.DataFrame,
@@ -278,6 +344,7 @@ def fit_regime_scaler(
     random_state: int = regime_cfg.get("random_state", 42)
     silhouette_min_threshold: float = regime_cfg.get("silhouette_min_threshold", 0.30)
     enforce_silhouette_gate: bool = regime_cfg.get("enforce_silhouette_gate", True)
+    silhouette_sample_size: int = int(regime_cfg.get("silhouette_sample_size", 5000))
 
     scaler = RegimeScaler(
         n_regimes=n_regimes,
@@ -285,6 +352,7 @@ def fit_regime_scaler(
         random_state=random_state,
         silhouette_min_threshold=silhouette_min_threshold,
         enforce_silhouette_gate=enforce_silhouette_gate,
+        silhouette_sample_size=silhouette_sample_size,
     )
     scaler.fit(df, sensor_cols)
     return scaler

@@ -58,16 +58,21 @@ def main(dataset_id: str = "FD001") -> None:
     Failure:      Raises if canonical gate (Engine 34) fails post-generation.
     """
     import joblib
-
+    from data.regime import resolve_regime_config
     from model.predict import FEATURE_COLUMNS, _compute_rf_ci
 
-    config = load_config()
+    config = resolve_regime_config(load_config(), dataset_id)
+    config["dataset_id"] = dataset_id
+    config["dataset"]["name"] = dataset_id
+    config["dataset"]["train_file"] = f"train_{dataset_id}.txt"
+    config["dataset"]["test_file"] = f"test_{dataset_id}.txt"
+    config["dataset"]["rul_file"] = f"RUL_{dataset_id}.txt"
 
     # ── 1. Run the canonical pipeline (same code path as the API) ─────────
     print(f"[train] Running canonical pipeline for {dataset_id}...")
-    train_rs, test_rs = load_pipeline_data_uncached(dataset_id)
+    train_rs, test_rs, scaler = load_pipeline_data_uncached(dataset_id)
 
-    _, _, test_rul_offsets = load_dataset(config)
+    _, test_raw, test_rul_offsets = load_dataset(config)
     test_with_rul = _attach_test_rul(test_rs, test_rul_offsets)
 
     # ── 2. Train RUL model ────────────────────────────────────────────────
@@ -89,9 +94,12 @@ def main(dataset_id: str = "FD001") -> None:
         fname = f"rul_{model_name.replace(' ', '_')}.joblib"
         joblib.dump(model_obj, artifact_dir / fname)
 
-    # Also write to models/ root (legacy path; keeps older callers from breaking)
-    legacy_dir = root_dir / "models"
-    joblib.dump(artifacts, legacy_dir / "rul_artifacts.joblib")
+    # Legacy flat path — only ever meant for FD001-era callers that predate
+    # per-dataset artifact directories. Writing this for any other dataset_id
+    # would silently overwrite whatever currently depends on it.
+    if dataset_id == "FD001":
+        legacy_dir = root_dir / "models"
+        joblib.dump(artifacts, legacy_dir / "rul_artifacts.joblib")
 
     print(f"[train] RUL artifacts saved → {artifact_dir}")
 
@@ -204,8 +212,17 @@ def main(dataset_id: str = "FD001") -> None:
         "sensor_20": "W31", "sensor_21": "W32",
     }
     sensor_cols = [c for c in test_rs.columns if c.startswith("sensor_")]
+    
+    setting_cols = config["regimes"]["setting_cols"]
+    test_rs_with_settings = test_rs.merge(
+        test_raw[["unit", "cycle"] + setting_cols],
+        on=["unit", "cycle"], how="left", validate="one_to_one",
+    )
+    fitted_sensor_cols = list(scaler._sensor_cols)
+    physical_df = scaler.inverse_transform_df(test_rs_with_settings, fitted_sensor_cols)
+
     sensor_cache: dict[int, dict] = {}
-    for eid, group in test_rs.groupby("unit"):
+    for eid, group in physical_df.groupby("unit"):
         eid = int(eid)
         group = group.sort_values("cycle")
         sensors = {
@@ -247,32 +264,33 @@ def main(dataset_id: str = "FD001") -> None:
     print(f"[artifacts] anomaly_cache_{dataset_id}.pkl saved ({len(anomaly_cache)} engines)")
 
     # ── 10. Canonical gate — fail loudly if Engine 34 is wrong ───────────
-    e34 = per_engine.get(34)
-    if e34 is None:
-        raise RuntimeError("Engine 34 not found in fleet_cache — training aborted")
+    if dataset_id == "FD001":
+        e34 = per_engine.get(34)
+        if e34 is None:
+            raise RuntimeError("Engine 34 not found in fleet_cache — training aborted")
 
-    CANONICAL_RISK  = 0.7402876566726511
-    CANONICAL_RUL   = 3.698652753342952
-    RISK_TOL        = 0.01
-    RUL_TOL         = 0.5
+        CANONICAL_RISK  = 0.7402876566726511
+        CANONICAL_RUL   = 3.698652753342952
+        RISK_TOL        = 0.01
+        RUL_TOL         = 0.5
 
-    risk_ok = abs(e34["risk_score"] - CANONICAL_RISK) < RISK_TOL
-    rul_ok  = abs(e34["rul_cycles"]  - CANONICAL_RUL)  < RUL_TOL
+        risk_ok = abs(e34["risk_score"] - CANONICAL_RISK) < RISK_TOL
+        rul_ok  = abs(e34["rul_cycles"]  - CANONICAL_RUL)  < RUL_TOL
 
-    print(f"\n[gate] Engine 34 / {dataset_id}")
-    print(f"       risk_score : {e34['risk_score']:.6f}  (canonical {CANONICAL_RISK})")
-    print(f"       rul_cycles : {e34['rul_cycles']:.6f}  (canonical {CANONICAL_RUL})")
-    print(f"       rmse       : {e34['rmse']:.3f}")
+        print(f"\n[gate] Engine 34 / {dataset_id}")
+        print(f"       risk_score : {e34['risk_score']:.6f}  (canonical {CANONICAL_RISK})")
+        print(f"       rul_cycles : {e34['rul_cycles']:.6f}  (canonical {CANONICAL_RUL})")
+        print(f"       rmse       : {e34['rmse']:.3f}")
 
-    if not (risk_ok and rul_ok):
-        raise RuntimeError(
-            f"[gate] FAILED — training artifacts do not match canonical Engine 34 values.\n"
-            f"       risk_score delta : {abs(e34['risk_score'] - CANONICAL_RISK):.6f} (tol {RISK_TOL})\n"
-            f"       rul_cycles delta : {abs(e34['rul_cycles'] - CANONICAL_RUL):.6f} (tol {RUL_TOL})\n"
-            f"       Artifacts NOT saved to production paths. Investigate before redeploying."
-        )
+        if not (risk_ok and rul_ok):
+            raise RuntimeError(
+                f"[gate] FAILED — training artifacts do not match canonical Engine 34 values.\n"
+                f"       risk_score delta : {abs(e34['risk_score'] - CANONICAL_RISK):.6f} (tol {RISK_TOL})\n"
+                f"       rul_cycles delta : {abs(e34['rul_cycles'] - CANONICAL_RUL):.6f} (tol {RUL_TOL})\n"
+                f"       Artifacts NOT saved to production paths. Investigate before redeploying."
+            )
 
-    print("[gate] PASSED ✓  — fleet_cache matches canonical Engine 34 values")
+        print("[gate] PASSED ✓  — fleet_cache matches canonical Engine 34 values")
     print("[train] Done.")
 
 
