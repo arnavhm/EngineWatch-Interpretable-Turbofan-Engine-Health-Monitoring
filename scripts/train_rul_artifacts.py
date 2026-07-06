@@ -3,7 +3,7 @@
 ARCHITECTURE NOTE:
     This script uses load_pipeline_data_uncached() — the same canonical pipeline
     that predict_engine_by_id() and the FastAPI /predict endpoint use at inference
-    time. Using any other pipeline function (e.g. build_pipeline_data) will produce
+    time. Using any other pipeline function will produce
     training features that diverge from inference features, causing the fleet_cache
     and live inference to disagree. Do not change this without updating the API too.
 

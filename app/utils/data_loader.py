@@ -3,11 +3,8 @@ import streamlit as st
 
 from data.load import load_config, load_dataset
 from data.preprocess import preprocess_test, preprocess_train
-from features.health_index import build_health_index
 from features.variability import build_variability
 from features.velocity import build_velocity
-from model.clustering import build_clustering
-from model.risk import build_risk_score
 
 _dataset_cache: dict[str, tuple] = {}
 
@@ -18,30 +15,6 @@ def get_cached_dataset(dataset_id: str, config: dict) -> tuple:
         _dataset_cache[dataset_id] = load_dataset(config)
     return _dataset_cache[dataset_id]
 
-
-def build_pipeline_data(
-    persist_outputs: bool = False,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run the full feature and risk pipeline for train and test datasets."""
-    config = load_config()
-    train_raw, test_raw, _ = load_dataset(config)
-    train_proc, scaler, _ = preprocess_train(
-        train_raw,
-        config,
-        persist_outputs=persist_outputs,
-    )
-    test_proc = preprocess_test(
-        test_raw,
-        config,
-        scaler,
-        persist_outputs=persist_outputs,
-    )
-    train_hi, test_hi, _ = build_health_index(train_proc, test_proc, config)
-    train_vel, test_vel, _ = build_velocity(train_hi, test_hi, config)
-    train_var, test_var, _ = build_variability(train_vel, test_vel, config)
-    train_cl, test_cl, cl_art = build_clustering(train_var, test_var, config)
-    train_rs, test_rs, _ = build_risk_score(train_cl, test_cl, cl_art)
-    return train_rs, test_rs
 
 
 def load_pipeline_data_uncached(
