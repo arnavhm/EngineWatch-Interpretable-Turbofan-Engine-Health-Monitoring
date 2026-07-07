@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Query
 
 from api.schemas import (EnginePrediction, FleetEngine, FleetHandover,
                          FleetSummary)
-from model.fleet_report import build_fleet_facts, narrate_handover
+from model.fleet_report import narrate_handover
 from model.sensor_metadata import SYMBOL_TO_META
 
 _predict_cache: dict[str, dict] = {}
@@ -81,11 +81,15 @@ async def lifespan(app: FastAPI):
             _attribution_cache.update(
                 {f"{dataset_id}:{eid}": data for eid, data in attribution_cache.items()}
             )
+            import logging
+            logging.warning(f"[startup] Loaded all 5 cache types for {dataset_id} (including attribution_cache_{dataset_id}.pkl)")
 
         except Exception as e:
-            print(f"[startup] Pre-warm failed for {dataset_id}: {e}")
+            import logging
+            logging.warning(f"[startup] Pre-warm failed for {dataset_id}: {e}")
             
-    print("[startup] All caches loaded — zero compute at runtime")
+    import logging
+    logging.warning("[startup] All caches loaded — zero compute at runtime")
     yield
 
 
@@ -266,10 +270,30 @@ def fleet_handover(
     """
     if dataset_id not in {"FD001", "FD002", "FD003", "FD004"}:
         raise HTTPException(422, detail="dataset_id must be FD001–FD004")
-    try:
-        facts = build_fleet_facts(dataset_id)
-    except FileNotFoundError as e:
-        raise HTTPException(503, detail=f"Artifacts unavailable: {e}")
+    
+    if dataset_id not in _fleet_summary_cache or dataset_id not in _fleet_top_risk_cache:
+        raise HTTPException(503, detail=f"Artifacts unavailable for {dataset_id}")
+
+    summary = _fleet_summary_cache[dataset_id]
+    top_critical = [
+        {
+            "engine_id": int(row["engine_id"]),
+            "risk_score": round(float(row["risk_score"]), 4),
+            "risk_state": str(row["risk_state"]),
+            "rul_cycles": round(float(row["rul_cycles"]), 2),
+        }
+        for row in _fleet_top_risk_cache[dataset_id][:5]
+    ]
+
+    facts = {
+        "dataset_id": dataset_id,
+        "fleet_size": summary["n_engines"],
+        "state_counts": summary["state_counts"],
+        "n_critical": summary["n_critical"],
+        "mean_rul": summary["mean_rul"],
+        "median_rul": summary["median_rul"],
+        "top_critical": top_critical,
+    }
 
     narrative = narrate_handover(facts)
     return FleetHandover(

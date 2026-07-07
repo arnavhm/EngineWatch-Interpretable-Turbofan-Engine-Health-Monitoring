@@ -84,7 +84,28 @@ async def narrate_chat(req: NarrationRequest, request: Request) -> NarrationResp
     # Fetch pre-computed attribution directly from the cached models, falling
     # back gracefully if the cache is missing for any reason.
     attribution_data = _attribution_cache.get(cache_key, {})
-    top_sensors = attribution_data.get("top_sensors", {})
+    
+    # Map the new get_engine_contributions structure to top_sensors
+    top_sensors = {}
+    dominant_module = attribution_data.get("dominant_module")
+    if dominant_module:
+        for mod in attribution_data.get("modules", []):
+            if mod.get("module") == dominant_module:
+                # Get the top 3 active sensors (they are already sorted by abs_contribution)
+                for i, sensor in enumerate(mod.get("active_sensors", [])[:3], 1):
+                    sid = sensor.get("sensor_id")
+                    if sid:
+                        top_sensors[sid] = {
+                            "rank": i,
+                            "sensor_value": sensor.get("sensor_value"),
+                            "loading": sensor.get("loading"),
+                            "signed_contribution": sensor.get("signed_contribution"),
+                            "abs_contribution_share_pct": sensor.get("abs_contribution", 0) * 100.0,
+                            "symbol": sensor.get("symbol"),
+                            "description": sensor.get("description"),
+                        }
+                break
+
     if not top_sensors:
         logging.warning(f"Attribution cache miss or empty for {cache_key}")
 

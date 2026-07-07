@@ -15,7 +15,7 @@ No ML training. Inference only: scaler.transform + pca.components_ projection.
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from model.predict import get_engine_contributions
+
 
 router = APIRouter(tags=["contributions"])
 
@@ -77,12 +77,15 @@ async def engine_contributions(
             detail=f"dataset_id must be one of {sorted(VALID_DATASETS)}",
         )
 
-    result = get_engine_contributions(engine_id, dataset_id)
+    from api.main import _attribution_cache
+
+    cache_key = f"{dataset_id}:{engine_id}"
+    result = _attribution_cache.get(cache_key)
 
     if result is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Engine {engine_id} not found in dataset {dataset_id}",
+            detail=f"Engine {engine_id} not found in dataset {dataset_id} attribution cache",
         )
 
     return ContributionsResponse(**result)

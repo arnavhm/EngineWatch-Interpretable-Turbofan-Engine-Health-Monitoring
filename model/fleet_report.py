@@ -86,68 +86,7 @@ def _gemini_model_name() -> str:
         return "gemini-2.5-flash"
 
 
-def build_fleet_facts(dataset_id: str) -> dict:
-    """
-    Purpose:
-        Produce a structured snapshot of fleet health for a given dataset.
-        Pure pipeline output — no LLM, no external calls.
 
-    Input shape:
-        dataset_id: str — one of FD001–FD004.
-
-    Output shape:
-        dict with keys:
-            dataset_id      str
-            fleet_size      int
-            state_counts    dict[str, int] — Healthy / Degrading / Critical
-            n_critical      int
-            mean_rul        float (1 dp)
-            median_rul      float (1 dp)
-            top_critical    list[dict] — up to 5 highest-risk engines,
-                            each with engine_id, risk_score (4 dp),
-                            risk_state, rul_cycles (2 dp)
-
-    Assumptions:
-        predict_fleet sorts by risk_score descending so head(5) gives the
-        highest-risk engines already.
-
-    Failure conditions:
-        Propagates FileNotFoundError from predict_fleet when artifacts are absent.
-        Raises ValueError for unrecognised dataset_id.
-    """
-    if dataset_id not in _VALID_DATASETS:
-        raise ValueError(
-            f"dataset_id must be one of {sorted(_VALID_DATASETS)}, got '{dataset_id}'"
-        )
-
-    fleet = predict_fleet(dataset_id)
-
-    raw_counts = fleet["risk_state"].value_counts().to_dict()
-    state_counts = {
-        "Healthy": int(raw_counts.get("Healthy", 0)),
-        "Degrading": int(raw_counts.get("Degrading", 0)),
-        "Critical": int(raw_counts.get("Critical", 0)),
-    }
-
-    top_critical = [
-        {
-            "engine_id": int(row["engine_id"]),
-            "risk_score": round(float(row["risk_score"]), 4),
-            "risk_state": str(row["risk_state"]),
-            "rul_cycles": round(float(row["rul_cycles"]), 2),
-        }
-        for _, row in fleet.head(5).iterrows()
-    ]
-
-    return {
-        "dataset_id": dataset_id,
-        "fleet_size": int(len(fleet)),
-        "state_counts": state_counts,
-        "n_critical": state_counts["Critical"],
-        "mean_rul": round(float(fleet["rul_cycles"].mean()), 1),
-        "median_rul": round(float(fleet["rul_cycles"].median()), 1),
-        "top_critical": top_critical,
-    }
 
 
 _HANDOVER_INSTRUCTION = (

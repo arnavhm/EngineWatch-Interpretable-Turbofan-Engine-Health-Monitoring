@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from app.utils.data_loader import load_pipeline_data_uncached
+from app.utils.data_loader import load_pipeline_data, load_pipeline_data_uncached
 from app.utils.rul_artifacts import _load_rul_artifacts_uncached
 
 FEATURE_COLUMNS = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
@@ -146,7 +146,7 @@ def _rename_sensor_keys(raw: dict[str, float]) -> dict[str, float]:
     return {"s" + k.split("_")[1]: v for k, v in raw.items()}
 
 
-def get_engine_contributions(engine_id: int, dataset_id: str) -> dict | None:
+def get_engine_contributions(engine_id: int, dataset_id: str, test_df: pd.DataFrame = None) -> dict | None:
     from pathlib import Path
 
     import joblib
@@ -164,7 +164,8 @@ def get_engine_contributions(engine_id: int, dataset_id: str) -> dict | None:
     except Exception:
         return None
 
-    _, test_df, _ = load_pipeline_data_uncached(dataset_id)
+    if test_df is None:
+        _, test_df, _ = load_pipeline_data(dataset_id)
     engine_df = test_df[test_df["unit"] == engine_id]
 
     if engine_df.empty:
