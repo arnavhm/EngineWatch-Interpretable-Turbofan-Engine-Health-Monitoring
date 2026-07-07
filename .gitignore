@@ -18,3 +18,6 @@ models/*/rul_random_forest.joblib
 models/rul_random_forest.joblib
 models/rul_artifacts.joblib
 models/FD001/rul_artifacts_full.joblib
+.venvs/
+.claude/
+*.log
