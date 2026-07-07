@@ -639,6 +639,34 @@ def apply_dual_health_index(
     return result
 
 
+def assign_operative_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Assign health_index, HI_velocity, and HI_variability generic columns
+    by selecting the operative axis values according to each row's fault_mode.
+    """
+    df = df.copy()
+    if "fault_mode" not in df.columns:
+        # Fallback if unclassified
+        return df
+
+    df["health_index"] = np.where(
+        df["fault_mode"] == "fan", 1.0 - df["HI_fan"], df["HI_hpc"]
+    )
+
+    if "HI_hpc_velocity" in df.columns and "HI_fan_velocity" in df.columns:
+        df["HI_velocity"] = np.where(
+            df["fault_mode"] == "fan", -df["HI_fan_velocity"], df["HI_hpc_velocity"]
+        )
+
+    if "HI_hpc_variability" in df.columns and "HI_fan_variability" in df.columns:
+        df["HI_variability"] = np.where(
+            df["fault_mode"] == "fan", df["HI_fan_variability"], df["HI_hpc_variability"]
+        )
+
+    return df
+
+
+
 def build_health_index(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -664,9 +692,6 @@ def build_health_index(
     test_with_dual = apply_dual_health_index(
         test_df, pca_by_axis, scaler_by_axis, config
     )
-
-    train_with_dual["health_index"] = train_with_dual["HI_hpc"]
-    test_with_dual["health_index"] = test_with_dual["HI_hpc"]
 
     hpc_sensors = _axis_sensor_config(config)["hpc"]
     hpc_pca = pca_by_axis["hpc"]

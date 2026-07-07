@@ -12,6 +12,7 @@ import EngineStatusVerdict from './components/EngineStatusVerdict';
 import SensorAccordion from './components/SensorAccordion';
 import VelocityPanel from './components/VelocityPanel';
 import VariabilityPanel from './components/VariabilityPanel';
+import NarrationChat from './components/NarrationChat';
 import { usePredict } from './hooks/usePredict';
 
 function Panel({ title, children, className = '' }: { title: string, children?: React.ReactNode, className?: string }) {
@@ -60,6 +61,10 @@ function App() {
           </Panel>
           <Panel title="Engine Health Map" className="md:col-span-1 lg:col-span-2">
             <EngineHealthMap engineId={selectedEngine} datasetId={selectedDataset} />
+          </Panel>
+          
+          <Panel title="Agentic AI Diagnostic Assistant" className="md:col-span-1 lg:col-span-1 md:row-span-2 lg:row-span-1">
+            <NarrationChat engineId={selectedEngine} datasetId={selectedDataset} />
           </Panel>
 
           <Panel title="Degradation Velocity" className="col-span-1 lg:col-span-1">

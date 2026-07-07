@@ -87,3 +87,20 @@ export async function getContributions(
   }
   return res.json();
 }
+
+export async function narrateChat(
+  req: { dataset_id: string; engine_id: number; session_id: string; message?: string }
+) {
+  const url = `${BASE}/narrate/chat`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req)
+  });
+  
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API error: ${res.status} - ${text}`);
+  }
+  return await res.json();
+}

@@ -118,9 +118,9 @@ class RiskScorer:
             NumPy array (n_rows,) in [0, 1] prior to train normalization.
 
         Assumptions:
-            For HPC-fault engines: distance = 1 - HI_hpc
-            For fan-fault engines: distance = 1 - HI_fan (higher HI = healthier, same as hpc).
-            For unified mode:      distance = 1 - min(HI_hpc, HI_fan)
+            For HPC-fault engines: distance = 1 - HI_hpc (higher HI = healthier)
+            For fan-fault engines: distance = HI_fan (higher HI = failing, opposite of hpc).
+            For unified mode:      distance = max(1 - HI_hpc, HI_fan)
 
         Failure conditions:
             Raises KeyError for missing HI axis columns.
@@ -138,16 +138,14 @@ class RiskScorer:
             # HI_hpc is naturally directed: higher = healthier
             distances = 1.0 - np.clip(operative_health, 0.0, 1.0)
         elif self._operative_axis == "fan":
-            # Dead branch: all datasets route to 'hpc' via n_fault_modes_by_dataset=1 in config.
-            # Formula kept symmetric with HPC (1 - HI_fan) so it is correct if re-enabled.
             operative_health = df["HI_fan"].to_numpy(dtype=float)
-            distances = 1.0 - np.clip(operative_health, 0.0, 1.0)
+            distances = np.clip(operative_health, 0.0, 1.0)
         else:
-            operative_health = np.minimum(
-                df["HI_hpc"].to_numpy(dtype=float),
-                df["HI_fan"].to_numpy(dtype=float),
-            )
-            distances = 1.0 - np.clip(operative_health, 0.0, 1.0)
+            operative_hpc = df["HI_hpc"].to_numpy(dtype=float)
+            operative_fan = df["HI_fan"].to_numpy(dtype=float)
+            distances_hpc = 1.0 - np.clip(operative_hpc, 0.0, 1.0)
+            distances_fan = np.clip(operative_fan, 0.0, 1.0)
+            distances = np.maximum(distances_hpc, distances_fan)
 
         return distances
 

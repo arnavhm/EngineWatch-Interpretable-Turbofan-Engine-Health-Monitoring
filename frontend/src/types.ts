@@ -108,5 +108,16 @@ export interface ContributionsResponse {
   modules: ModuleHeat[];
 }
 
+export interface NarrationRequest {
+  dataset_id: string;
+  engine_id: number;
+  session_id: string;
+  message?: string;
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
+export interface NarrationResponse {
+  session_id: string;
+  reply: string | null;
+  narration_available: boolean;
+  role_used: string | null;
+}

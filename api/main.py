@@ -20,10 +20,13 @@ _fleet_top_risk_cache: dict[str, list] = {}
 _trajectory_cache: dict[str, dict] = {}
 _sensor_cache: dict[str, dict] = {}
 _anomaly_cache: dict[str, list] = {}
-
+_attribution_cache: dict[str, dict] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from api.routes.narration import NarrationSessionStore
+    app.state.narration_store = NarrationSessionStore()
+
     for dataset_id in ["FD001", "FD002", "FD003", "FD004"]:
         try:
             cache_path = (
@@ -68,6 +71,16 @@ async def lifespan(app: FastAPI):
                 / f"anomaly_cache_{dataset_id}.pkl"
             )
             _anomaly_cache[dataset_id] = joblib.load(anomaly_cache_path)
+
+            attribution_cache_path = (
+                Path(__file__).resolve().parent.parent
+                / "models"
+                / f"attribution_cache_{dataset_id}.pkl"
+            )
+            attribution_cache = joblib.load(attribution_cache_path)
+            _attribution_cache.update(
+                {f"{dataset_id}:{eid}": data for eid, data in attribution_cache.items()}
+            )
 
         except Exception as e:
             print(f"[startup] Pre-warm failed for {dataset_id}: {e}")
@@ -268,5 +281,7 @@ def fleet_handover(
 
 
 from api.routes.contributions import router as contributions_router
+from api.routes.narration import router as narration_router
 
 app.include_router(contributions_router)
+app.include_router(narration_router)

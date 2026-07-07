@@ -38,7 +38,8 @@ def load_pipeline_data_uncached(
     config["dataset"]["rul_file"] = f"RUL_{dataset_id}.txt"
 
     from features.health_index import (apply_dual_health_index,
-                                       build_dual_health_index)
+                                       build_dual_health_index,
+                                       assign_operative_features)
     from model.clustering import build_clustering_per_fault_mode
     from model.fault_classifier import classify_engines, fit_fault_classifier
     from model.risk import build_risk_score_per_fault_mode
@@ -54,8 +55,6 @@ def load_pipeline_data_uncached(
     test_hi = apply_dual_health_index(
         test_proc, hi_pca_by_axis, hi_scaler_by_axis, config
     )
-    train_hi["health_index"] = train_hi["HI_hpc"]
-    test_hi["health_index"] = test_hi["HI_hpc"]
 
     train_vel, test_vel, _ = build_velocity(train_hi, test_hi, config)
     train_var, test_var, _ = build_variability(train_vel, test_vel, config)
@@ -63,6 +62,9 @@ def load_pipeline_data_uncached(
     fault_artifacts = fit_fault_classifier(train_var, config)
     train_var = classify_engines(train_var, fault_artifacts, config)
     test_var = classify_engines(test_var, fault_artifacts, config)
+
+    train_var = assign_operative_features(train_var)
+    test_var = assign_operative_features(test_var)
 
     train_cl, test_cl, clusterers_by_mode = build_clustering_per_fault_mode(
         train_var, test_var, config

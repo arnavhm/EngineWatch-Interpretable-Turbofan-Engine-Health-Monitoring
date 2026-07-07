@@ -263,6 +263,105 @@ def main(dataset_id: str = "FD001") -> None:
     joblib.dump(anomaly_cache, anomaly_path)
     print(f"[artifacts] anomaly_cache_{dataset_id}.pkl saved ({len(anomaly_cache)} engines)")
 
+    # ── 9.5 Attribution cache ─────────────────────────────────────────────
+    from features.health_index import compute_sensor_contributions, aggregate_module_contributions
+    from model.predict import _rename_sensor_keys
+
+    pca_path = root_dir / "models" / dataset_id / "hi_pca_by_axis.joblib"
+    try:
+        hi_pca_by_axis = joblib.load(pca_path)
+    except Exception:
+        hi_pca_by_axis = {}
+
+    diagram_axis_cfg = config.get("diagram_axis", "hpc")
+    if isinstance(diagram_axis_cfg, str):
+        if diagram_axis_cfg in ["dual", "both", "all"]:
+            axes_to_render = list(config.get("health_index", {}).get("axes", {}).keys())
+        else:
+            axes_to_render = [diagram_axis_cfg]
+    elif isinstance(diagram_axis_cfg, list):
+        axes_to_render = diagram_axis_cfg
+    else:
+        axes_to_render = ["hpc"]
+
+    attribution_cache = {}
+    for eid, group in test_rs.groupby("unit"):
+        eid = int(eid)
+        engine_last_row = group.iloc[[-1]]
+        
+        # Get physical values for this engine's last cycle
+        physical_last_row = physical_df[physical_df["unit"] == eid].iloc[[-1]]
+        
+        # Select PCA axis based on the engine's classified fault mode
+        engine_fault_mode = str(engine_last_row["fault_mode"].iloc[0]) if "fault_mode" in engine_last_row.columns else "hpc"
+        axis = engine_fault_mode if engine_fault_mode in hi_pca_by_axis else "hpc"
+        
+        raw_contributions = {}
+        if axis in hi_pca_by_axis:
+            pca = hi_pca_by_axis[axis]
+            axis_cfg = config.get("health_index", {}).get("axes", {}).get(axis, {})
+            axis_sensors = axis_cfg.get("by_dataset", {}).get(
+                dataset_id, axis_cfg.get("sensors", [])
+            )
+            axis_sensors = [s for s in axis_sensors if s in engine_last_row.columns]
+            if axis_sensors:
+                df_contrib = compute_sensor_contributions(engine_last_row, pca, axis_sensors)
+                last_row_contrib = df_contrib.iloc[-1]
+
+                for s in axis_sensors:
+                    col_name = f"{s}_contribution"
+                    if col_name in last_row_contrib:
+                        raw_contributions[s] = float(last_row_contrib[col_name])
+
+        contributions = _rename_sensor_keys(raw_contributions)
+        module_heat = aggregate_module_contributions(contributions, config)
+
+        active_modules = {k: v for k, v in module_heat.items() if v["is_active"]}
+        if active_modules:
+            dominant_key = max(active_modules, key=lambda k: active_modules[k]["norm_magnitude"])
+            dominant_data = active_modules[dominant_key]
+
+            top_sensors = sorted(
+                dominant_data["active_sensors"].items(),
+                key=lambda x: abs(x[1]),
+                reverse=True,
+            )[:3]
+
+            top_sensors_dict = {}
+            for rank, (sid, contrib) in enumerate(top_sensors, start=1):
+                s_col = f"sensor_{sid[1:]}" if sid.startswith("s") else sid
+                
+                # Fetch sensor_value from physical_df, exactly matching /sensors endpoint
+                sensor_value = float(physical_last_row[s_col].iloc[0]) if s_col in physical_last_row.columns else 0.0
+
+                loading = 0.0
+                if axis in hi_pca_by_axis:
+                    pca = hi_pca_by_axis[axis]
+                    ax_sens = config.get("health_index", {}).get("axes", {}).get(axis, {}).get("by_dataset", {}).get(dataset_id, config.get("health_index", {}).get("axes", {}).get(axis, {}).get("sensors", []))
+                    if s_col in ax_sens:
+                        idx = ax_sens.index(s_col)
+                        loading = float(pca.components_[0, idx])
+
+                top_sensors_dict[sid] = {
+                    "rank": rank,
+                    "sensor_value": round(sensor_value, 4),
+                    "loading": round(loading, 4),
+                    "signed_contribution": round(float(contrib), 4),
+                    "abs_contribution_share_pct": round(abs(float(contrib)), 4) * 100.0
+                }
+        else:
+            dominant_key = None
+            top_sensors_dict = {}
+
+        attribution_cache[eid] = {
+            "dominant_module": dominant_key,
+            "top_sensors": top_sensors_dict
+        }
+
+    attribution_path = root_dir / "models" / f"attribution_cache_{dataset_id}.pkl"
+    joblib.dump(attribution_cache, attribution_path)
+    print(f"[artifacts] attribution_cache_{dataset_id}.pkl saved ({len(attribution_cache)} engines)")
+
     # ── 10. Canonical gate — fail loudly if Engine 34 is wrong ───────────
     if dataset_id == "FD001":
         e34 = per_engine.get(34)
