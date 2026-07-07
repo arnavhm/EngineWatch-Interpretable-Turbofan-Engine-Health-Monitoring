@@ -42,9 +42,9 @@ const API_MAP: Record<string, string> = {
 
 export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMapProps) {
   const { data, loading, error } = useContributions(engineId, datasetId);
-  const [hoveredZone, setHoveredZone] = useState<string | null>(null);
+  const [selectedZone, setSelectedZone] = useState<string | null>(null);
 
-  const getZoneColor = (zone: string, isHovered: boolean) => {
+  const getZoneColor = (zone: string, isSelected: boolean) => {
     if (!data) return { fill: 'transparent', stroke: 'transparent' };
     const apiKey = API_MAP[zone];
     
@@ -74,7 +74,7 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
       }
     }
     
-    if (isHovered) {
+    if (isSelected) {
       alpha = Math.min(alpha + 0.2, 0.8);
       stroke = stroke === 'transparent' ? 'rgba(255,255,255,0.3)' : stroke;
     }
@@ -93,18 +93,17 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
       <path
         key={zone}
         d={pathData}
-        style={getZoneColor(zone, hoveredZone === zone)}
-        onMouseEnter={() => setHoveredZone(zone)}
-        onMouseLeave={() => setHoveredZone(null)}
+        style={getZoneColor(zone, selectedZone === zone)}
+        onClick={() => setSelectedZone(prev => prev === zone ? null : zone)}
       />
     ));
   };
 
   // Find info for the details panel
   let panelContent = null;
-  if (hoveredZone) {
-    const staticInfo = STATIC_BLURBS[hoveredZone];
-    const apiKey = API_MAP[hoveredZone];
+  if (selectedZone) {
+    const staticInfo = STATIC_BLURBS[selectedZone];
+    const apiKey = API_MAP[selectedZone];
     const mod = apiKey && data ? data.modules.find(m => m.module.toLowerCase() === apiKey.toLowerCase()) : null;
     
     let isDominant = false;
@@ -113,8 +112,14 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
     }
     
     panelContent = (
-      <div className="flex flex-col gap-2 p-4 h-full bg-panel2/30">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2 p-4 h-full bg-panel2/30 relative">
+        <button 
+          onClick={() => setSelectedZone(null)}
+          className="absolute top-4 right-4 text-[10px] font-mono font-bold text-muted hover:text-text px-2 py-1 bg-panel border border-border rounded cursor-pointer transition-colors"
+        >
+          CLEAR
+        </button>
+        <div className="flex items-center gap-3 pr-16">
           <span className="text-xl font-bold text-accent">{mod ? mod.display_name : staticInfo.name}</span>
           <span className="text-xs text-muted font-mono bg-panel border border-border px-2 py-1 rounded">{staticInfo.spool}</span>
           {mod && (
@@ -157,7 +162,7 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
   } else {
     panelContent = (
       <div className="flex items-center justify-center h-full text-muted text-sm font-mono opacity-50 p-6 text-center">
-        Hover a section of the engine to inspect its live health contribution.
+        Click a section of the engine to inspect its live health contribution.
       </div>
     );
   }
@@ -351,7 +356,7 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
 
         </div>
         
-        <div className="min-h-[140px] border border-border rounded-lg bg-panel overflow-hidden">
+        <div className="min-h-[260px] max-h-[300px] overflow-y-auto border border-border rounded-lg bg-panel">
           {panelContent}
         </div>
       </div>
