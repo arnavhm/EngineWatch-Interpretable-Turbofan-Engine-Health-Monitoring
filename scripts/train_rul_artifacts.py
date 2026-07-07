@@ -203,6 +203,66 @@ def main(dataset_id: str = "FD001") -> None:
         f"({len(trajectory_cache)} engines)"
     )
 
+    # ── 7.5 Fleet Risk Trend ──────────────────────────────────────────────
+    # NOTE: This trend is an RUL-prediction-anchored approximation, not
+    # ground-truth lifespan. Accuracy is bounded by RUL RMSE (18-34 cycles
+    # depending on dataset) and is least reliable in early-life deciles.
+    
+    print("[artifacts] Building fleet risk trend cache...")
+    try:
+        risk_arts = joblib.load(root_dir / "models" / dataset_id / "risk_artifacts_by_fault.joblib")
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to load risk_artifacts_by_fault.joblib for {dataset_id}: {e}")
+        raise
+    
+    trend_data = []
+    for eid, t_dict in trajectory_cache.items():
+        engine_group = test_rs[test_rs["unit"] == eid]
+        f_mode = str(engine_group["fault_mode"].iloc[-1]) if "fault_mode" in engine_group.columns else "hpc"
+        
+        if f_mode not in risk_arts:
+            import logging
+            keys_found = list(risk_arts.keys())
+            logging.error(f"Engine {eid} fault_mode '{f_mode}' not found in risk_arts keys {keys_found}")
+            raise KeyError(f"Missing risk_artifacts for fault_mode '{f_mode}'")
+            
+        ra = risk_arts[f_mode]
+        d_min, d_max = ra.d_min, ra.d_max
+        
+        pred_rul = per_engine[eid]["rul_cycles"]
+        c_arr = np.array(t_dict["cycles"])
+        h_arr = np.array(t_dict["health_index"])
+        
+        last_c = c_arr[-1]
+        life_pct = np.clip(c_arr / (last_c + pred_rul), 0.0, 1.0)
+        
+        d_arr = 1.0 - h_arr
+        denom = (d_max - d_min) if (d_max != d_min) else 1.0
+        r_arr = (d_arr - d_min) / denom
+        
+        for p, r in zip(life_pct, r_arr):
+            trend_data.append({"engine_id": eid, "life_pct": p, "risk_score": r})
+            
+    trend_df = pd.DataFrame(trend_data)
+    bins = np.linspace(0.0, 1.0, 11)
+    trend_df["decile"] = pd.cut(trend_df["life_pct"], bins=bins, labels=False, include_lowest=True)
+    
+    trend_cache = []
+    for d_idx in range(10):
+        grp = trend_df[trend_df["decile"] == d_idx]
+        mean_risk = float(grp["risk_score"].mean()) if not grp.empty else 0.0
+        n_eng = int(grp["engine_id"].nunique())
+        trend_cache.append({
+            "life_pct_bin": d_idx,
+            "mean_risk_score": mean_risk,
+            "n_engines_contributing": n_eng
+        })
+        
+    trend_path = root_dir / "models" / f"fleet_trend_cache_{dataset_id}.pkl"
+    joblib.dump(trend_cache, trend_path)
+    print(f"[artifacts] fleet_trend_cache_{dataset_id}.pkl saved (10 deciles)")
+
     # ── 8. Sensor cache ───────────────────────────────────────────────────
     SENSOR_NAME_MAP = {
         "sensor_2": "T24", "sensor_3": "T30", "sensor_4": "T50",

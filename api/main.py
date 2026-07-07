@@ -21,6 +21,7 @@ _trajectory_cache: dict[str, dict] = {}
 _sensor_cache: dict[str, dict] = {}
 _anomaly_cache: dict[str, list] = {}
 _attribution_cache: dict[str, dict] = {}
+_fleet_trend_cache: dict[str, list] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -81,8 +82,17 @@ async def lifespan(app: FastAPI):
             _attribution_cache.update(
                 {f"{dataset_id}:{eid}": data for eid, data in attribution_cache.items()}
             )
+            
+            trend_cache_path = (
+                Path(__file__).resolve().parent.parent
+                / "models"
+                / f"fleet_trend_cache_{dataset_id}.pkl"
+            )
+            _fleet_trend_cache[dataset_id] = joblib.load(trend_cache_path)
+
             import logging
-            logging.warning(f"[startup] Loaded all 5 cache types for {dataset_id} (including attribution_cache_{dataset_id}.pkl)")
+            logging.warning(f"[startup] Loaded all 6 cache types for {dataset_id} (including attribution_cache_{dataset_id}.pkl and fleet_trend_cache_{dataset_id}.pkl)")
+
 
         except Exception as e:
             import logging
@@ -304,8 +314,10 @@ def fleet_handover(
     )
 
 
+from api.routes.analytics import router as analytics_router
 from api.routes.contributions import router as contributions_router
 from api.routes.narration import router as narration_router
 
+app.include_router(analytics_router)
 app.include_router(contributions_router)
 app.include_router(narration_router)
