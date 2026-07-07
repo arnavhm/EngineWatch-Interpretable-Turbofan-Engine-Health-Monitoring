@@ -21,3 +21,5 @@ models/FD001/rul_artifacts_full.joblib
 .venvs/
 .claude/
 *.log
+frontend/stats.json
+frontend/sm-explorer.html
