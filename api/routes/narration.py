@@ -78,7 +78,7 @@ async def narrate_chat(req: NarrationRequest, request: Request) -> NarrationResp
     for row in anomaly_list:
         if row.get("engine_id") == engine_id or row.get("unit") == engine_id:
             is_anomalous = row.get("is_anomaly", False)
-            anomaly_reason = row.get("anomaly_reason", "Anomalous health trajectory")
+            anomaly_reason = row.get("anomaly_reason", "Anomalous health trajectory" if is_anomalous else "Within normal fleet range")
             break
 
     # Fetch pre-computed attribution directly from the cached models, falling
