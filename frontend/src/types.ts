@@ -1,5 +1,33 @@
 export type RiskState = "Healthy" | "Degrading" | "Critical";
 
+export interface HistogramBin {
+  bin_start: number;
+  bin_end: number;
+  count: number;
+}
+
+export interface TrendDecile {
+  life_pct_bin: number;
+  mean_risk_score: number;
+  n_engines_contributing: number;
+}
+
+export interface FleetAnalyticsResponse {
+  dataset_id: string;
+  risk_histogram: HistogramBin[];
+  state_counts: Partial<Record<RiskState, number>>;
+  risk_trend: TrendDecile[];
+}
+
+export interface FleetCompareRow {
+  dataset_id: string;
+  fleet_size: number;
+  state_counts: Partial<Record<RiskState, number>>;
+  n_critical: number;
+  mean_rul: number;
+  median_rul: number;
+}
+
 export interface PredictResponse {
   engine_id: number;
   dataset_id: string;

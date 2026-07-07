@@ -1,4 +1,4 @@
-import type { PredictResponse, FleetSummary, TopRiskItem, TrajectoryResponse, SensorResponse, AnomalyPoint, ContributionsResponse } from './types';
+import type { PredictResponse, FleetSummary, TopRiskItem, TrajectoryResponse, SensorResponse, AnomalyPoint, ContributionsResponse, FleetAnalyticsResponse, FleetCompareRow } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE;
 
@@ -73,6 +73,15 @@ export async function getAnomaly(datasetId: string): Promise<AnomalyPoint[]> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // import { ContributionsResponse } from "./types";   // already in types.ts
+
+export async function getFleetAnalytics(datasetId: string): Promise<FleetAnalyticsResponse> {
+  const params = new URLSearchParams({ dataset_id: datasetId });
+  return fetchJson<FleetAnalyticsResponse>(`/fleet/analytics?${params.toString()}`);
+}
+
+export async function getFleetCompare(): Promise<FleetCompareRow[]> {
+  return fetchJson<FleetCompareRow[]>(`/fleet/compare`);
+}
 
 export async function getContributions(
   engineId: number,
