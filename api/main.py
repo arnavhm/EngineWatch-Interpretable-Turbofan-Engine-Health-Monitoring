@@ -5,12 +5,13 @@ Hybrid Architecture: A standalone inference entry point. The dashboard's CSV-upl
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+import subprocess
 
 import joblib
 from fastapi import FastAPI, HTTPException, Query
 
-from api.schemas import (EnginePrediction, FleetEngine, FleetHandover,
-                         FleetSummary)
+from api.schemas import (ApiVersion, EnginePrediction, FleetEngine,
+                         FleetHandover, FleetSummary)
 from model.fleet_report import narrate_handover
 from model.sensor_metadata import SYMBOL_TO_META
 
@@ -131,6 +132,35 @@ def health() -> dict:
     Output: {status: 'ok', 'service': "enginewatch-inference-api"}
     """
     return {"status": "ok", "service": "enginewatch-inference-api"}
+
+
+@app.get("/version", response_model=ApiVersion)
+def get_version() -> ApiVersion:
+    """Return the currently deployed git commit hash and short status.
+
+    Input: none.
+    Output: {"commit": str, "commit_short": str, "dirty": bool}
+    Assumptions: process is running from within the git repo checkout.
+    Failure conditions: git command fails or repo not found — raises
+    explicitly (500), never returns a fabricated/cached hash.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+        ).strip()
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=repo_root, text=True
+        ).strip()
+        return ApiVersion(
+            commit=commit,
+            commit_short=commit[:8],
+            dirty=bool(status),
+        )
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Could not determine git version: {e}"
+        )
 
 
 @app.get("/trajectory")

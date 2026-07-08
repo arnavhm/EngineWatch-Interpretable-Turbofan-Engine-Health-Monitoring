@@ -1,0 +1,77 @@
+name: CI Live Canonical Gate
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # every 6 hours
+  workflow_dispatch: {}
+
+jobs:
+  live-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check deployed version matches main
+        run: |
+          DEPLOYED=$(curl -sf https://enginewatch.tech/api/version | jq -r '.commit // empty')
+          LOCAL=$(git rev-parse HEAD)
+          echo "Deployed: $DEPLOYED"
+          echo "main HEAD: $LOCAL"
+          
+          if [ -z "$DEPLOYED" ]; then
+            echo "::error::Could not retrieve a commit hash from /api/version at all — endpoint down, not deployed, or unexpected response format. Hard failure, not a deploy-pending situation."
+            exit 1
+          fi
+          
+          if [ "$DEPLOYED" != "$LOCAL" ]; then
+            echo "::warning::Deployed commit ($DEPLOYED) does not match main HEAD ($LOCAL) — expected if a deploy is pending, investigate if it persists."
+          fi
+      - name: Check canonical Engine 34 / FD001 gate
+        run: |
+          python3 -c "
+          import json, urllib.request, sys
+
+          with open('config/canonical_gate.json') as f:
+              canon = json.load(f)['engine_34_fd001']
+
+          resp = urllib.request.urlopen(
+              'https://enginewatch.tech/api/predict?engine_id=34&dataset_id=FD001'
+          )
+          actual = json.load(resp)
+
+          failed = False
+          for key, expected in canon.items():
+              got = actual.get(key)
+              if isinstance(expected, float):
+                  ok = got is not None and abs(got - expected) < 1e-9
+              else:
+                  ok = got == expected
+              status = 'OK' if ok else 'MISMATCH'
+              print(f'{status}: {key} expected={expected} actual={got}')
+              if not ok:
+                  failed = True
+
+          sys.exit(1 if failed else 0)
+          "
+      - name: Check per-dataset RMSE
+        run: |
+          python3 -c "
+          import json, urllib.request, sys
+
+          with open('config/canonical_gate.json') as f:
+              canon = json.load(f)['rmse_by_dataset']
+
+          failed = False
+          for dataset_id, expected_rmse in canon.items():
+              resp = urllib.request.urlopen(
+                  f'https://enginewatch.tech/api/predict?engine_id=1&dataset_id={dataset_id}'
+              )
+              actual = json.load(resp)
+              got = actual.get('rmse')
+              ok = got is not None and abs(got - expected_rmse) < 1e-3
+              status = 'OK' if ok else 'MISMATCH'
+              print(f'{status}: {dataset_id} expected={expected_rmse} actual={got}')
+              if not ok:
+                  failed = True
+
+          sys.exit(1 if failed else 0)
+          "

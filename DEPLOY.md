@@ -7,7 +7,12 @@
 - **API:** `systemd` service `enginewatch` → `uvicorn` on `0.0.0.0:8000` (NOT `enginewatch-api`)
 - **Web:** Caddy. Serves React from `/var/www/enginewatch`; proxies `/api/*` → `:8000` (strips `/api`)
 - **Env:** `.venvs/project-2` (Python 3.12, `sklearn` 1.4.2). Never base miniforge.
-- **Canon:** Engine 34 / FD001 → RUL 3.70, risk 0.7403, HI 0.260, Critical, RMSE 18.459. Fleet RMSEs (all confirmed live on droplet 2026-07-06): FD001 18.459, FD002 31.125, FD003 22.798, FD004 34.410
+- **Canon:** Values defined in `config/canonical_gate.json` — this is the
+  single source of truth. Engine 34 / FD001 → RUL 3.70, risk 0.7403,
+  HI 0.260, Critical, RMSE 18.459. Fleet RMSEs: FD001 18.459, FD002 31.125,
+  FD003 22.798, FD004 34.410. (These numbers mirror the JSON for human
+  readability — if they ever disagree, the JSON file is correct and this
+  line is stale.)
 
 ## Offline Cache Generation (Zero-Runtime API Prep)
 

@@ -64,3 +64,17 @@ class FleetHandover(BaseModel):
     narration_available: bool = Field(
         ..., description="True when the Gemini call succeeded"
     )
+
+
+class ApiVersion(BaseModel):
+    """
+    Purpose:     Return the currently deployed git commit hash and short status.
+    Input:       none.
+    Output:      {"commit": str, "commit_short": str, "dirty": bool}
+    Assumptions: process is running from within the git repo checkout.
+    Failure:     git command fails or repo not found — raises explicitly (500).
+    """
+
+    commit: str
+    commit_short: str
+    dirty: bool
