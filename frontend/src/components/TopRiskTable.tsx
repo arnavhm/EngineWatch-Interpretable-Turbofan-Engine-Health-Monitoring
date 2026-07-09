@@ -4,7 +4,7 @@ import PanelState from './PanelState';
 
 interface TopRiskTableProps {
   datasetId: string;
-  selectedEngine: number;
+  selectedEngine?: number;
   onSelectEngine: (id: number) => void;
 }
 
@@ -25,7 +25,7 @@ export default function TopRiskTable({ datasetId, selectedEngine, onSelectEngine
             
             <div className="flex flex-col flex-1 overflow-y-auto">
               {data.map((item) => {
-                const isSelected = item.engine_id === selectedEngine;
+                const isSelected = selectedEngine !== undefined && item.engine_id === selectedEngine;
                 const colorClass = STATE_TEXT[item.risk_state];
                 const colorVar = STATE_VAR[item.risk_state];
                 
