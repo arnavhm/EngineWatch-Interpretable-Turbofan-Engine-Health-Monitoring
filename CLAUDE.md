@@ -1,181 +1,120 @@
+@AGENTS.md
+
 ## Project Identity
 
 - Project name: EngineWatch — Interpretable Turbofan Engine Health Monitoring
-- Dataset: NASA CMAPSS FD001
-- GitHub repo URL: git@github.com:arnavhm/EngineWatch-Interpretable-Turbofan-Engine-Health-Monitoring.git
-- Current iteration status: Iteration 1 complete; Iteration 2 planned/in progress
+- Dataset: NASA CMAPSS FD001–FD004 (all four, live)
+- GitHub repo: git@github.com:arnavhm/EngineWatch-Interpretable-Turbofan-Engine-Health-Monitoring.git
+- Live at: https://enginewatch.tech
+- Current status: Iteration 3 — deployed, multi-dataset, fleet analytics live.
+  Backend/ML pipeline stable and cache-backed. Frontend redesign (Fleet
+  Command / Engine Drill-Down split-screen) in progress — see
+  `enginewatch-frontend-architect` / `enginewatch-frontend-builder` skills
+  for that workstream specifically.
+- Notion command center (authoritative project record):
+  page ID `0568c6b3-a261-45d2-a202-addd7959da5a`. Check this at session
+  start via MCP if available — it wins over anything in this file if the
+  two disagree.
 
-## Architecture — Non-Negotiable
+## Where things actually live (don't duplicate — read from source)
 
-- Exact workspace structure in scope:
+- **Environment/verification invariants, deploy discipline, no-silent-fallback
+  rules**: `AGENTS.md` (root) — included above via `@AGENTS.md`.
+- **Detailed module-by-module architecture, dataset facts, current feature
+  set**: `copilot-instructions.md` — kept current, treat as the living
+  architecture reference rather than re-describing it here.
+- **Deploy steps, invariants, canonical Engine 34/FD001 gate values,
+  troubleshooting**: `DEPLOY.md`.
+- **Config values, feature toggles**: `config/config.yaml` — never
+  hardcoded elsewhere.
+
+This file intentionally does not repeat canonical metrics, architecture
+diagrams, or dataset facts that live in those other files — Iteration 1's
+version of this file drifted badly out of sync by duplicating them, which is
+exactly the failure mode `AGENTS.md` Section 10 exists to prevent.
+
+## Workspace structure (flat, no `src/` wrapper — non-negotiable)
 
 ```text
-config/
-  config.yaml
-
-data/
-  __init__.py
-  load.py
-  preprocess.py
-  raw/
-    train_FD001.txt
-    test_FD001.txt
-    RUL_FD001.txt
-  processed/
-
-features/
-  __init__.py
-  health_index.py
-  velocity.py
-  variability.py
-
-model/
-  __init__.py
-  clustering.py
-  risk.py
-  rul.py
-
-evaluation/
-  __init__.py
-  validation.py
-
-app/
-  __init__.py
-  dashboard.py
-  theme.py
-  components/
-    fleet_overview.py
-    engine_selector.py
-    hi_plot.py
-    dynamics_plots.py
-    risk_gauge.py
-    cluster_timeline.py
-    rul_prediction.py
-    model_evaluation.py
-  utils/
-    data_loader.py
-    rul_artifacts.py
-
-scripts/
-  train_rul_artifacts.py
-
+config/            # config.yaml — single source of truth for parameters
+data/               # load.py, preprocess.py, regime.py
+features/           # health_index.py, velocity.py, variability.py
+model/              # fault_classifier.py, clustering.py, risk.py, rul.py
+evaluation/          # validation.py
+api/                # FastAPI — api/main.py, zero runtime ML computation
+app/                 # Streamlit dashboard (secondary interface, not primary)
+frontend/            # React/Vite/Tailwind/TS — the primary live UI
+scripts/             # train_rul_artifacts.py, train_all_datasets.py — the
+                      # ONLY places training happens (Mac, .venvs/project-2)
 tests/
-  __init__.py
-  test_preprocess_pipeline.py
-  test_iteration1_modules.py
-  test_validation.py
-
-notebooks/
-  01_data_exploration.ipynb
-  02_health_index_verification.ipynb
-  03_velocity_variability_verification.ipynb
-  04_rul_evaluation.ipynb
-  clustering_checklist.ipynb
-  risk_checklist.ipynb
-  rul_verification_checklist.ipynb
-  validation_checklist.ipynb
+notebooks/            # exploration/verification only — no core logic here
 ```
 
-- Import pattern:
-  - Core modules are imported via package paths from project root (for example `from data.load import ...`, `from model.rul import ...`).
-  - Notebook scripts and `app/dashboard.py` add project root to `sys.path` for reliable local execution.
-- Notebooks are exploration/verification only. Core logic must live in modules under `data/`, `features/`, `model/`, and `evaluation/`.
+Core logic lives in `data/`, `features/`, `model/`, `evaluation/`, `api/` —
+never in notebooks, never in the dashboard, never in the frontend.
 
-## Hard Constraints — Never Violate These
+## Hard Constraints — Never Violate
 
-- No deep learning of any kind (LSTM, RNN, Transformer, neural network).
-  - Reason: this codebase is explicitly interpretable/physics-aligned and currently built around classical features + regression baselines.
-- No dashboard retraining. Dashboard is inference-only. Models are built by `scripts/train_rul_artifacts.py`.
-- `StandardScaler` must be fit on training data only. Never on test data.
-  - Reason: fitting on test data causes leakage and optimistic/unreliable evaluation.
-- No hardcoded constants. All parameters from `config/config.yaml`.
-- No global state.
-
-## Approved Feature Set
-
-- `health_index` (PCA PC1, normalized and direction-corrected): `features/health_index.py`
-- `HI_velocity` (rolling linear slope via `numpy.polyfit`): `features/velocity.py`
-- `HI_variability` (rolling standard deviation, normalized): `features/variability.py`
-- `risk_state` (Healthy/Degrading/Critical via KMeans k=3): `model/clustering.py`
-- `risk_score` (distance-based continuous score in [0,1]): `model/risk.py`
-- RUL supervised inputs used by models: `health_index`, `HI_velocity`, `HI_variability`, `risk_score` in `model/rul.py`
-
-## Key Results
-
-Verified from current code execution + stored artifacts in this repository environment:
-
-- PC1 explained variance: 0.6425 (64.25%)
-- Health Index means:
-  - Early-life mean HI: 0.7528
-  - Late-life mean HI: 0.1812
-- Silhouette score: 0.4005 (≈ 0.40)
-- Mean Spearman rho (HI monotonicity): -0.9250
-- Pearson r (risk vs RUL): -0.7683
-- RMSE by model:
-  - `linear_regression`: 19.49
-  - `random_forest`: 19.32
-  - `gradient_boosting`: 18.55
-- NASA score by model:
-  - `linear_regression`: 609.2
-  - `random_forest`: 822.3
-  - `gradient_boosting`: 694.4
-- Best model: `gradient_boosting`
-- Feature importances:
-  - `random_forest`: `risk_score` 0.7675674339785266, `health_index` 0.13479824472119425, `HI_velocity` 0.054379040340413035, `HI_variability` 0.04325528095986608
-  - `gradient_boosting`: `risk_score` 0.6955711519585897, `health_index` 0.21307491347855667, `HI_velocity` 0.08761191587245681, `HI_variability` 0.003742018690396893
-- Anomalous engine IDs: 48, 51
+- No deep learning of any kind (LSTM, RNN, Transformer, neural network) —
+  this project is explicitly interpretable/physics-aligned, not a
+  benchmark-chasing exercise.
+- No dashboard/API retraining — both are inference-only. Training happens
+  only via `scripts/`, only on Mac, only under `.venvs/project-2`.
+- Scalers (`RegimeScaler`, `StandardScaler`) fit on train data only, never
+  on test data.
+- No hardcoded constants — everything from `config/config.yaml`.
+- No global mutable state.
+- `dataset_id` always explicit — see `AGENTS.md` Section 4.
 
 ## Code Standards
 
-- Type hints are required on function signatures.
-- Docstrings follow the project pattern centered on:
-  - Purpose
-  - Input shape
-  - Output shape
-  - Assumptions
-  - Failure conditions
-- Every transformation stage should document those five elements in module/function docstrings.
+- Type hints required on all function signatures.
+- Docstrings: Purpose, Input shape, Output shape, Assumptions, Failure
+  conditions — on every transformation stage.
+- Fixed `random_state=42` for all stochastic operations.
 
 ## Environment
 
-- Python version in active project venv: 3.12.12
-- Virtual environment path: `/Users/arnavhmutt/Desktop/aviation-ds-projects/.venvs/project-2`
-- Activation command:
-  - `source /Users/arnavhmutt/Desktop/aviation-ds-projects/.venvs/project-2/bin/activate`
-- Pinned dependencies (`requirements.txt`):
-  - numpy==1.26.4
-  - pandas==2.2.2
-  - scikit-learn==1.4.2
-  - joblib==1.4.2
-  - matplotlib==3.8.4
-  - scipy==1.13.0
-  - seaborn==0.13.2
-  - plotly==5.22.0
-  - streamlit==1.32.0
-  - pyyaml==6.0.1
-  - ipykernel==6.29.4
-  - jupyter==1.0.0
-  - black==24.4.2
-  - pytest==8.2.0
-- Rule: training (`scripts/train_rul_artifacts.py`) and dashboard (`app/dashboard.py`) must always run under the same interpreter/venv.
-
-## Iteration 2 — Current Work
-
-1. AOG cost simulator with synthetic benchmark dataset grounded in IATA MRO reports and DGCA data
-2. Multi-dataset execution FD002-FD004 with operating condition normalisation
-3. Wire confidence intervals into dashboard
-4. Wire anomaly detection scatter plot into dashboard
-5. Engine SVG graphic with sensor contribution hover
-6. Agentic AI diagnostic narration
-7. Streamlit Cloud deployment
+- Python 3.12, `.venvs/project-2`. Verification command in `AGENTS.md`
+  Section 2 — run it before trusting any measurement, every session.
+- Pinned: numpy 1.26.4, scikit-learn 1.4.2, joblib 1.4.2 (exact versions
+  matter — version drift has caused silent unpickling failures before).
 
 ## Ownership
 
-- ML pipeline, `scripts/`, `data/`, `features/`, `model/`, `evaluation/` — owned by Arnav.
-- Dashboard frontend, `app/components/`, `app/dashboard.py` — owned by Antigravity IDE.
+- ML pipeline, `scripts/`, `data/`, `features/`, `model/`, `evaluation/`,
+  `api/` — Arnav owns all correctness decisions; Claude does the reasoning;
+  Antigravity executes structured briefs (see `execute-claude-brief` skill).
+- `frontend/` (React/Vite/Tailwind) — governed by the
+  `enginewatch-frontend-architect` (design) and `enginewatch-frontend-builder`
+  (execution) skills. Those skills live in Antigravity's `.agents/skills/`
+  directory and are not readable from here — if you (Claude Code) are asked
+  to touch `frontend/` directly, you're operating without full visibility
+  into their rules. At minimum, without exception, regardless of what's
+  requested:
+  - No hardcoded/dummy data in any component — wire every UI state to real
+    backend API payloads, even for a "quick test" or placeholder feature.
+  - Tailwind utility classes only — no inline `style={{}}`, no raw CSS,
+    even if asked for directly.
+  - Never use a real canonical identifier (Engine 34/FD001, or any other
+    value that appears in `DEPLOY.md`'s verification gate) as a stand-in
+    for fake/placeholder/test data, in code, comments, or examples — it
+    creates exactly the kind of real-vs-canonical confusion this project
+    has repeatedly had to guard against. Use an ID that doesn't exist in
+    any real dataset instead.
+  If a frontend request conflicts with any of the above, say so and ask,
+  the same way you would for any other invariant in this file — don't
+  infer silently from the existing codebase and don't proceed past a
+  hardcoded-data request just because it was asked for explicitly.
+  Recommend routing substantial frontend work through Antigravity instead,
+  since it has the full rule set and verification tooling for that surface.
+- Streamlit `app/dashboard.py` — secondary/legacy interface, not the primary
+  deployed product; lower priority for changes unless explicitly requested.
 
-## Notion Command Center
+## Session start checklist
 
-- Page ID: Not found in repository files.
-- URL: Not found in repository files.
-- Session rule: Always check the Notion command center for current project state before starting any session. If missing, obtain the active page ID/URL first.
+1. Check Notion command center for current state (MCP, if available).
+2. Confirm `.venvs/project-2` resolves correctly before trusting any
+   existing measurement in this session.
+3. If working on a Claude-authored brief, follow the reporting format in
+   `AGENTS.md` Section 10 rather than a narrative summary.
