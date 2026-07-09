@@ -4,6 +4,9 @@
   "python.analysis.autoImportCompletions": true,
   "python.interpreter.infoVisibility": "never",
   "python.locator": "native",
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
   "chat.mcp.serverSampling": {
     "project-2-predictive-maintenance/.vscode/mcp.json: myNotion": {
       "allowedModels": [

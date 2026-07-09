@@ -19,35 +19,92 @@ def check_empty_parens_dataset_id() -> tuple[bool, str]:
     Mirrors the exact grep from copilot-instructions.md — this is that
     manual check, automated instead of relied on as a memorized habit.
     """
-    # Tightened pattern: match specific function names that accept dataset_id
-    func_names = [
-        "get_engine_prediction",
-        "get_trajectory",
-        "get_sensors",
-        "get_anomaly",
-        "predict",
-        "predict_csv_endpoint",
-        "fleet_top_risk",
-        "fleet_summary",
-        "fleet_handover",
-        "render_engine_selector",
-        "_load_rul_artifacts",
-        "render_model_evaluation",
-        "render_rul_prediction",
-        "load_artifacts",
-        "get_cached_dataset",
-        "load_pipeline_data_uncached",
-        "load_pipeline_data",
-    ]
-    pattern = r"(" + "|".join(func_names) + r")\s*\(\s*\)"
-    result = subprocess.run(
-        ["grep", "-rnE", pattern, "--include=*.py", "app/", "api/"],
-        cwd=REPO_ROOT, capture_output=True, text=True,
-    )
-    matches = [l for l in result.stdout.splitlines() if l.strip()]
+    import ast
+
+    app_api_files = list((REPO_ROOT / "app").rglob("*.py")) + list((REPO_ROOT / "api").rglob("*.py"))
+    
+    funcs_needing_dataset_id = {}
+    
+    # 1. Find all functions that take dataset_id
+    for filepath in app_api_files:
+        try:
+            tree = ast.parse(filepath.read_text(), filename=str(filepath))
+        except SyntaxError:
+            continue
+            
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for i, arg in enumerate(node.args.args):
+                    if arg.arg == "dataset_id":
+                        funcs_needing_dataset_id[node.name] = i
+                        break
+                if node.name not in funcs_needing_dataset_id:
+                    for arg in node.args.kwonlyargs:
+                        if arg.arg == "dataset_id":
+                            funcs_needing_dataset_id[node.name] = None
+                            break
+                            
+    matches = []
+    unexpected = []
+    
+    # 2. Find all calls and check if they omit dataset_id
+    for filepath in app_api_files:
+        try:
+            tree = ast.parse(filepath.read_text(), filename=str(filepath))
+        except SyntaxError:
+            continue
+            
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func_name = None
+                is_attribute = False
+                
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    func_name = node.func.attr
+                    is_attribute = True
+                else:
+                    # Dynamic dispatch or complex expression
+                    rel_path = filepath.relative_to(REPO_ROOT)
+                    unexpected.append(f"{rel_path}:{node.lineno}: Dynamic dispatch ({type(node.func).__name__})")
+                    continue
+                
+                if func_name in funcs_needing_dataset_id:
+                    # Exclude 'predict' called as an attribute (e.g. model.predict) to avoid sklearn false positives.
+                    # Tradeoff: This matches on bare name only. It could theoretically miss a real omission
+                    # if api.predict is ever called via attribute access (e.g. module.predict()) on something
+                    # other than a fitted model. This is a deliberate scope-limiting decision to keep the check
+                    # simple, not an oversight.
+                    if is_attribute and func_name == "predict":
+                        continue
+                        
+                    idx = funcs_needing_dataset_id[func_name]
+                    passed = False
+                    
+                    for kw in node.keywords:
+                        if kw.arg == "dataset_id" or kw.arg is None: # None means **kwargs
+                            passed = True
+                            break
+                            
+                    if not passed and idx is not None:
+                        if len(node.args) > idx:
+                            passed = True
+                        for arg in node.args:
+                            if isinstance(arg, ast.Starred):
+                                passed = True
+                                
+                    if not passed:
+                        rel_path = filepath.relative_to(REPO_ROOT)
+                        matches.append(f"{rel_path}:{node.lineno}: Call to {func_name} omits dataset_id")
+
+    if unexpected:
+        return False, "Unexpected AST nodes found:\n" + "\n".join(unexpected)
+
     if matches:
-        return False, "Empty-parens calls found:\n" + "\n".join(matches)
-    return True, "No empty-parens dataset_id calls found."
+        return False, "Empty-parens or omitted dataset_id calls found:\n" + "\n".join(matches)
+        
+    return True, f"No omitted dataset_id calls found across {len(funcs_needing_dataset_id)} target functions."
 
 
 def check_pinned_dependencies() -> tuple[bool, str]:

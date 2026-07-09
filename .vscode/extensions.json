@@ -1,0 +1,20 @@
+{
+  "recommendations": [
+    "bradlc.vscode-tailwindcss",
+    "humao.rest-client",
+    "tamasfe.even-better-toml",
+    "bierner.markdown-mermaid",
+    "dsznajder.es7-react-js-snippets",
+    "charliermarsh.ruff",
+    "ms-python.python",
+    "ms-toolsai.jupyter"
+  ],
+  "unwantedRecommendations": [
+    "ms-vscode-remote.remote-ssh",
+    "vscjava.migrate-java-to-azure",
+    "vscjava.vscode-java-upgrade",
+    "ms-kubernetes-tools.vscode-kubernetes-tools",
+    "ms-python.black-formatter",
+    "openai.chatgpt"
+  ]
+}
