@@ -66,8 +66,8 @@ def _resolve_gemini_api_key() -> str:
 def _gemini_model_name() -> str:
     """
     Purpose:
-        Read the Gemini model name from project config, falling back to the
-        canonical project default so this module works without a loaded config.
+        Read the Gemini model name from project config. No hardcoded
+        fallback — config/config.yaml is the single source of truth.
     Input shape:
         None.
     Output shape:
@@ -75,15 +75,20 @@ def _gemini_model_name() -> str:
     Assumptions:
         config/config.yaml has dashboard.gemini_model_name.
     Failure conditions:
-        Returns fallback string if config is missing or unreadable.
+        Raises KeyError if dashboard.gemini_model_name is missing from
+        config. Propagates any load_config() failure (e.g. missing/unreadable
+        config file) rather than silently substituting a hardcoded default.
     """
-    try:
-        from data.load import load_config  # noqa: PLC0415
+    from data.load import load_config  # noqa: PLC0415
 
-        cfg = load_config()
+    cfg = load_config()
+    try:
         return str(cfg["dashboard"]["gemini_model_name"])
-    except Exception:
-        return "gemini-2.5-flash"
+    except KeyError as exc:
+        raise KeyError(
+            "Missing required config key: dashboard.gemini_model_name. "
+            "This must be set in config/config.yaml — no hardcoded fallback."
+        ) from exc
 
 
 

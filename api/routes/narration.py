@@ -159,7 +159,13 @@ async def narrate_chat(req: NarrationRequest, request: Request) -> NarrationResp
         )
 
     config = load_config()
-    model_name = config.get("dashboard", {}).get("gemini_model_name", "gemini-2.5-flash")
+    try:
+        model_name = config["dashboard"]["gemini_model_name"]
+    except KeyError as exc:
+        raise KeyError(
+            "Missing required config key: dashboard.gemini_model_name. "
+            "This must be set in config/config.yaml — no hardcoded fallback."
+        ) from exc
 
     try:
         reply = fetch_gemini_narration(prompt=prompt, model_name=model_name, api_key=api_key)

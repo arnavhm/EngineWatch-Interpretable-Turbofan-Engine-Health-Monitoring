@@ -92,8 +92,11 @@ Both changed → backend first (restart), then frontend (build+copy+reload)
 - `/predict?engine_id=1&dataset_id=FD002` → rmse 31.125
 - `/predict?engine_id=1&dataset_id=FD003` → rmse 22.798
 - `/predict?engine_id=1&dataset_id=FD004` → rmse 34.410
-- `/contributions` → dominant_module hpc, critical
+- `/predict/34/contributions?dataset_id=FD001` → dominant_module hpc, critical
 - `/sensors T24` → layman_text + module present
+- `/fleet/analytics?dataset_id=FD001` → risk histogram + state counts + risk trend present
+- `/fleet/compare` → cross-dataset table present for all four datasets
+- `/fleet/handover?dataset_id=FD001` → handover summary present
 - browser fresh-viewer test (trace color → module → sensor → cause with zero narration)
 
 ## Troubleshooting & Operations

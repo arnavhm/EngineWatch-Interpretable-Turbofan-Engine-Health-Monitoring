@@ -27,12 +27,12 @@ Raw Telemetry (26 cols)
     ↓
 Preprocessing (flat sensor removal, StandardScaler)
     ↓
-PCA Health Index (PC1, 64.3% variance explained)
+PCA Health Index (PC1, [RETIRED — see canonical table] variance explained)
     ↓
 Health Velocity (rolling linear regression slope)
 Health Variability (rolling std, normalised)
     ↓
-KMeans Clustering (k=3, silhouette 0.40)
+KMeans Clustering (k=3, silhouette [RETIRED — see canonical table])
     ↓
 Risk Score (Euclidean distance to Critical centroid)
     ↓
@@ -47,11 +47,11 @@ Streamlit Dashboard
 
 | Metric                       | Value             |
 | ---------------------------- | ----------------- |
-| PC1 explained variance       | 64.3%             |
+| PC1 explained variance       | [RETIRED — see canonical table] |
 | HI early life → late life    | 0.75 → 0.18       |
-| Silhouette score             | 0.40              |
-| Spearman ρ (HI monotonicity) | −0.925            |
-| Risk–RUL Pearson r           | −0.768            |
+| Silhouette score             | [RETIRED — see canonical table] |
+| Spearman ρ (HI monotonicity) | [RETIRED — see canonical table] |
+| Risk–RUL Pearson r           | [RETIRED — see canonical table] |
 | Best model                   | HistGradientBoostingRegressor |
 | RMSE                         | [RETIRED — see canonical table] |
 | NASA score                   | [RETIRED — see canonical table] |
@@ -192,6 +192,13 @@ Pipeline validated across all four CMAPSS datasets:
 - FD002 — 6 conditions, 1 fault mode ✅ Pipeline validated
 - FD003 — 1 condition, 2 fault modes ✅ Pipeline validated
 - FD004 — 6 conditions, 2 fault modes ✅ Pipeline validated
+
+  Fault-mode counts above describe the raw dataset labels only. In the
+  current deployed pipeline, this code path is correct and architecturally
+  sound but currently INERT in production: `n_fault_modes_by_dataset=1` for
+  all four datasets forces every engine to `fault_mode="hpc"` via a dummy
+  short-circuit. Do not read "2 fault modes" above as describing live
+  routing.
   - FD004 documented limitation: NASA score 53,028 on hpc-only routing. 
     The previously cited 12,998 figure depended on fan-axis routing 
     (a non-predictive signal) and is retired.
