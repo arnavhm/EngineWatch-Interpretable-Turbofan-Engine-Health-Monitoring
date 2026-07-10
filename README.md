@@ -1,211 +1,191 @@
 # EngineWatch — Interpretable Turbofan Engine Health Monitoring
 
-> Predictive maintenance prototype for NASA CMAPSS turbofan engines.  
-> Built with interpretable ML — no deep learning, full diagnostic chain.
+> Deployed predictive maintenance system for NASA CMAPSS turbofan engines.
+> Interpretable ML, zero-live-recompute API, full CI automation — no deep learning, full diagnostic chain.
+
+**Live at:** [enginewatch.tech](https://enginewatch.tech)
 
 ---
 
 ## What This System Does
 
-EngineWatch monitors turbofan engine degradation and predicts Remaining Useful Life (RUL) using an interpretable pipeline grounded in aerospace physics. Given per-cycle engine telemetry, the system produces:
+EngineWatch monitors turbofan engine degradation and predicts Remaining Useful Life (RUL) using an interpretable pipeline grounded in aerospace physics, across all four NASA CMAPSS datasets (FD001–FD004). Given per-cycle engine telemetry, the system produces:
 
-- A **Health Index** tracking degradation from healthy (0.75) to critical (0.18)
+- A **Health Index** tracking degradation from healthy to critical
 - **Health Velocity** — rate of decline per cycle
 - **Health Variability** — instability signal preceding failure
-- **Cluster-based health state** — Healthy / Degrading / Critical
-- **Continuous Risk Score** — distance-based, normalised to [0, 1]
-- **RUL Prediction** with confidence intervals — best model RMSE [RETIRED — see canonical table]
+- **Cluster-based health state** — Healthy / Degrading / Critical (KMeans, k=3)
+- **Continuous Risk Score** — normalized distance metric, fit on train only
+- **RUL Prediction** with confidence intervals (RandomForest tree variance)
 - **Sensor contribution breakdown** — which sensors are driving degradation
 - **Anomaly detection** — flags engines outside the training distribution
+- **Fleet-level analytics** — cross-engine risk ranking, trend analysis, handover summaries
+- **Agentic narration** — plain-language diagnostic explanations per engine (Gemini 2.5 Flash runtime, never load-bearing for correctness)
+
+Every prediction is served from pre-computed cached artifacts — the API layer performs zero live ML computation.
 
 ---
 
 ## Architecture
 
 ```text
-Raw Telemetry (26 cols)
+Raw Telemetry (26 cols, FD001–FD004)
     ↓
 Preprocessing (flat sensor removal, StandardScaler)
+Regime Normalization (RegimeScaler — load-bearing for FD002/FD004, degenerates to 1 regime for FD001/FD003)
     ↓
-PCA Health Index (PC1, [RETIRED — see canonical table] variance explained)
+PCA Health Index
     ↓
 Health Velocity (rolling linear regression slope)
 Health Variability (rolling std, normalised)
     ↓
-KMeans Clustering (k=3, silhouette [RETIRED — see canonical table])
+KMeans Clustering (k=3)
     ↓
-Risk Score (Euclidean distance to Critical centroid)
+Risk Score — d = 1 - HI_hpc, normalized (d - d_min) / (d_max - d_min), fit on train only
     ↓
-RUL Prediction (HistGradientBoostingRegressor, RMSE [RETIRED — see canonical table])
+RUL Prediction — Monotonic HistGradientBoostingRegressor (sklearn 1.4.2)
+  monotonic constraints: [health_index: 1, HI_velocity: 0, HI_variability: -1, risk_score: -1]
+  RandomForest retained for confidence intervals only, never as point-prediction
     ↓
-Streamlit Dashboard
+Pre-computed artifact cache (models/{dataset_id}/rul_artifacts.joblib)
+    ↓
+FastAPI backend (zero live recomputation) → React/Vite/TypeScript frontend
 ```
+
+**Fault-mode routing:** HPC-only for all four datasets (`n_fault_modes_by_dataset: 1` everywhere). The dual-axis (HPC + Fan) code path is architecturally real and correct but currently inert in production — re-verified empirically that the fan-degradation axis is genuinely non-predictive for FD003/FD004 (Spearman 0.032 / 0.114) even after fixing two latent bugs found during that investigation. Reactivating it is a deliberate, not-yet-made decision — never re-enable without an explicit brief.
 
 ---
 
-## Key Results
+## Key Results — Canonical Metric Table (HPC-only, verified)
 
-| Metric                       | Value             |
-| ---------------------------- | ----------------- |
-| PC1 explained variance       | [RETIRED — see canonical table] |
-| HI early life → late life    | 0.75 → 0.18       |
-| Silhouette score             | [RETIRED — see canonical table] |
-| Spearman ρ (HI monotonicity) | [RETIRED — see canonical table] |
-| Risk–RUL Pearson r           | [RETIRED — see canonical table] |
-| Best model                   | HistGradientBoostingRegressor |
-| RMSE                         | [RETIRED — see canonical table] |
-| NASA score                   | [RETIRED — see canonical table] |
-| Late predictions             | 46 / 100 engines  |
-| Early predictions            | 54 / 100 engines  |
+**Acceptance criterion is risk–RUL Spearman correlation, not NASA score or RMSE alone** — the deliberate trade-off is a traceable inference chain over benchmark-chasing.
+
+| Dataset | Best Model | RMSE | NASA Score | Risk–RUL Spearman |
+|---|---|---|---|---|
+| FD001 | HistGBR (monotonic) | 18.459 | 617.5 | −0.750 |
+| FD002 | HistGBR (monotonic) | 31.125 | 13,635 | −0.765 |
+| FD003 | HistGBR (monotonic) | 22.798 | 1,995.7 | −0.816 |
+| FD004 | HistGBR (monotonic) | 34.410 | 53,028 | −0.736 |
+
+FD002/FD004 are documented weaker points, not clean wins — FD002 clustering silhouette (0.284) sits below the 0.30 threshold and is a disclosed limitation, not a bug.
+
+**Canonical gate (Engine 34 / FD001, checked on every deploy):**
+
+```
+risk_score:    0.7402876566726511
+rul_cycles:    3.698652753342952
+health_index:  0.2597123433273489
+risk_state:    Critical
+rmse:          18.459221643626265
+```
+
+Single source of truth: `config/canonical_gate.json`, consumed directly by `ci-live-gate.yml`. If any document (including this README) disagrees with that file, the file is correct.
+
+---
+
+## Why Not Deep Learning?
+
+A deliberate architectural decision, not a limitation:
+
+1. **Dataset size** — ~20K rows per dataset, ~100 engines. Insufficient for reliable LSTM/Transformer training.
+2. **Physics** — HPC degradation follows a known decay pattern captured well by PCA + monotonic gradient boosting.
+3. **Interpretability** — every prediction has a traceable, explainable inference chain. No SHAP either — SHAP is a post-hoc approximation; this system is interpretable by construction (monotonic constraints + linear health-index decomposition), not explained after the fact.
+4. **Deployment** — classical models are lighter, auditable, and reproducible without GPU infrastructure.
+5. **Model scope discipline** — C-MAPSS models a 2-spool turbofan (GE90/PW4090-class). A 3-spool Rolls-Royce Trent architecture is explicitly out of scope for this dataset, since the intermediate-pressure shaft isn't modeled — the system does not claim generality beyond what the data supports.
+
+The accepted cost: higher RMSE (~18.5 vs. ~13 achievable with an LSTM on FD001) in exchange for a fully traceable, monotonic, auditable inference chain.
+
+---
+
+## Deployment & Infrastructure
+
+- **Backend:** FastAPI + uvicorn, `systemd` service `enginewatch`, fully cache-backed
+- **Frontend:** React / Vite / TypeScript / Tailwind / Recharts, hand-rolled routing (~25 lines, zero new dependencies)
+- **Reverse proxy:** Caddy, Let's Encrypt SSL, `enginewatch.tech`
+- **Host:** DigitalOcean droplet (2GB/1vCPU), 2GB swap file active
+- **Artifacts:** `models/{dataset_id}/rul_artifacts.joblib` (100–330MB each), deployed via `rsync`, not git (gitignored — exceeds GitHub's 100MB limit)
+- **Deploy verification:** `/api/version` returns the deployed git commit hash; `ci-live-gate.yml` hits production on a schedule and hard-fails if unreachable; manual browser fresh-viewer check is still required per `DEPLOY.md` and is not replaced by automation
+
+## CI Automation
+
+- **`ci-static.yml`** — runs on every PR: AST-based `dataset_id` threading check, exact dependency pinning, regime-config duplication check, cache-tracking correctness
+- **`ci-live-gate.yml`** — scheduled every 6 hours (and manually triggerable): hits production directly, validates against `config/canonical_gate.json`
+- **`/api/version`** — makes "is the droplet running what I think" a `curl`, not an SSH session
+
+## AI Coordination Contract
+
+This project is built with a documented multi-agent workflow, not ad hoc prompting:
+
+- **Claude** (this assistant) — architecture, correctness sign-off, brief authoring (~90% of reasoning work)
+- **Antigravity** (Google, Gemini-based agentic IDE) — executes structured briefs for backend/ML/deploy and frontend work; reads `AGENTS.md` and auto-discovers `.agents/skills/`
+- **Claude Code** (Anthropic CLI agent) — reasoning-heavy/cross-cutting execution; reads `CLAUDE.md` (includes `AGENTS.md`), no access to `.agents/skills/`
+- **Claude Cowork** (Anthropic, autonomous batch agent) — narrow, pre-scoped, report-only-by-default tasks; does not auto-read `AGENTS.md`, constraints must be inline in the prompt
+- **GitHub Copilot** — inline mechanical work only (renames, lint, boilerplate)
+- **Gemini 2.5 Flash** — narration runtime only, never load-bearing for correctness
+
+Governing documents: `AGENTS.md` (repo root), `CLAUDE.md`, `.github/copilot-instructions.md`, `.agents/skills/`, `.agents/test-prompts.md` (five regression tests, each grounded in a real caught incident, re-run cold after any contract change).
+
+**Verification discipline:** "looks right," "confirmed working," and "deployment complete" are claims to check against real diff/curl/terminal output, never accepted as prose summaries — this pattern has caught multiple real regressions in production.
 
 ---
 
 ## Project Structure
 
 ```text
-data/           load.py, preprocess.py
+data/           load.py, preprocess.py, regime.py (RegimeScaler)
 features/       health_index.py, velocity.py, variability.py
-model/          clustering.py, risk.py, rul.py
+model/          clustering.py, risk.py, rul.py, fault_classifier.py
 evaluation/     validation.py
-app/            dashboard.py, components/
-config/         config.yaml
-notebooks/      01_data_exploration.ipynb, 02_rul_evaluation.ipynb
-reports/        rul_evaluation_plots.png
+app/            FastAPI backend, endpoint routers
+frontend/       React/Vite/TypeScript — Fleet Command (Level 1), Engine Drill-Down (Level 2)
+config/         config.yaml, canonical_gate.json
+scripts/        deployment + data pipeline utilities
+.agents/        skills/, test-prompts.md (Antigravity-only, auto-discovered)
+AGENTS.md       shared multi-agent operating contract
+CLAUDE.md       Claude Code entry point (includes AGENTS.md)
+DEPLOY.md       authoritative manual deployment process
 ```
-
----
-
-## Why Not Deep Learning?
-
-This is a deliberate architectural decision, not a limitation:
-
-1. **Dataset size** — ~20K rows, 100 engines. Insufficient for reliable LSTM/Transformer training
-2. **Physics** — HPC degradation follows known exponential decay captured by PCA
-3. **Interpretability** — every prediction has a traceable, explainable inference chain
-4. **Deployment** — classical models are faster, lighter, and easier to audit
-
----
-
-## Dashboard
-
-The Streamlit dashboard provides:
-
-- Fleet risk overview (bar chart, top 5 priority list, degradation heatmap)
-- Per-engine health trajectory, velocity, variability, and risk gauge
-- Predicted RUL with confidence interval
-- Degradation state timeline
-- Model evaluation panel (all three models compared)
-
-Run locally:
-
-```bash
-pip install -r requirements.txt
-```
-
-Before training or launching the dashboard, activate the project virtual environment so artifacts are built and loaded with the same Python/scikit-learn stack.
-
-```bash
-source .venvs/project-2/bin/activate
-```
-
-### ▶️ Running the Project
-
-Step 1 — Train models (required)
-
-```bash
-python train_rul_artifacts.py
-```
-
-Step 2 — Launch dashboard
-
-```bash
-streamlit run app/dashboard.py
-```
-
-Note: Running `python dashboard.py` is only for sanity checks.
-The dashboard must be launched using Streamlit.
 
 ---
 
 ## Environment & Model Artifacts
 
-Model artifacts are version-sensitive. Train and run the dashboard inside the same project virtual environment so the joblib files are created and loaded with the same Python and scikit-learn stack.
-
-Use the project environment at:
+Model artifacts are version-sensitive. Train and run the backend inside the same project virtual environment so joblib files are created and loaded against the same Python/scikit-learn stack.
 
 ```bash
-source .venvs/project-2/bin/activate
+# venv lives one directory above the repo root
+source ../.venvs/project-2/bin/activate
+
+# Always verify before trusting any measurement:
+which python
+pip show scikit-learn numpy joblib
 ```
 
-Recommended run sequence:
+Pinned versions: Python 3.12, scikit-learn 1.4.2, numpy 1.26.4, joblib 1.4.2.
 
-```bash
-pip install -r requirements.txt
-python train_rul_artifacts.py
-streamlit run app/dashboard.py
-```
-
-Do not mix interpreters between training and dashboard execution.
+Do not mix interpreters between training and serving. Never reuse a shell session where `source .../activate` previously failed — abandon it and open a fresh terminal; stale env vars silently corrupt subsequent `which python` / `pip show` output.
 
 ---
 
 ## Dataset
 
-NASA CMAPSS FD001 — 100 training engines, 100 test engines, single operating condition, HPC degradation fault mode.
+NASA CMAPSS FD001–FD004 — single- and multi-operating-condition turbofan degradation data, HPC fault mode (as currently routed in production).
 
-Reference: Saxena et al., _Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation_, PHM 2008.
+Reference: Saxena et al., *Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation*, PHM 2008.
 
 ---
 
 ## Status
 
-**Iteration 1 — Complete**  
-Full FD001 pipeline, dashboard, RUL prediction, evaluation, anomaly detection.
+**v3.0 — Deployed, multi-dataset, fleet analytics live, AI coordination contract formalized, CI automation live.**
 
-## Iteration 2 — AOG Cost Impact Simulator
+- ✅ Full FD001–FD004 pipeline, HPC-only monotonic HistGBR, live at enginewatch.tech
+- ✅ Zero-live-recompute API surface across all endpoints
+- ✅ Fleet-level analytics, agentic narration layer
+- ✅ Full CI automation (`ci-static.yml`, `ci-live-gate.yml`, `/api/version`)
+- ✅ Formal multi-agent coordination contract (`AGENTS.md`, `.agents/`)
+- ✅ Frontend Level 1 (Fleet Command) shipped and live
+- 🔄 Frontend Level 2 (Engine Drill-Down split-screen) — code-complete locally, not yet pushed/deployed; primary open item blocking the EngineWatch Stability Gate
+- ⚪ AeroGraph (aviation knowledge-graph platform) — blueprint stage only, gated on the Stability Gate, not a committed date
 
-### What's New
-
-- **AOG Cost Impact Simulator** (`app/components/aog_cost_simulator.py`) —
-  translates ML risk outputs into economic maintenance decisions
-- **Decision formula:** Expected AOG cost = P(failure) × AOG cost per event.
-  Act now if preventive maintenance cost < expected AOG cost
-- **Dashboard panel** renders below RUL prediction — shows both cost scenarios,
-  urgency badge, and estimated saving in Rs Crores
-- **BTS Form 41 data pipeline** (`scripts/fetch_bts_benchmarks.py`) — fetches
-  real engine maintenance cost data from US DOT transtats database
-
-### Cost Benchmarks
-
-All figures sourced from published primary sources — see `data/sources.md`:
-
-- Go First NCLT IBC Filing, May 2023 (India narrowbody AOG: ~Rs 4.55 Cr/event)
-- IATA MCX FY2024 Public Report (global average: $1,522/flight-hour)
-- BTS Form 41 Schedule P-5.2 + T-2, FY2023 (engine cost per block-hour)
-- Eurocontrol Standard Inputs Edition 10, May 2024
-
-### Multi-Dataset Support
-
-Pipeline validated across all four CMAPSS datasets:
-
-- FD001 — 1 condition, 1 fault mode ✅ Full dashboard support
-- FD002 — 6 conditions, 1 fault mode ✅ Pipeline validated
-- FD003 — 1 condition, 2 fault modes ✅ Pipeline validated
-- FD004 — 6 conditions, 2 fault modes ✅ Pipeline validated
-
-  Fault-mode counts above describe the raw dataset labels only. In the
-  current deployed pipeline, this code path is correct and architecturally
-  sound but currently INERT in production: `n_fault_modes_by_dataset=1` for
-  all four datasets forces every engine to `fault_mode="hpc"` via a dummy
-  short-circuit. Do not read "2 fault modes" above as describing live
-  routing.
-  - FD004 documented limitation: NASA score 53,028 on hpc-only routing. 
-    The previously cited 12,998 figure depended on fan-axis routing 
-    (a non-predictive signal) and is retired.
-
-Multi-condition dashboard visualization is in active development.
-
-### Running the AOG Simulator
-
-No retraining required. The simulator reads from pipeline outputs at runtime.
-All cost parameters configurable in `config/config.yaml → aog_simulator`.
+Superseded — do not cite: any RMSE/NASA figures outside the canonical table above, any "dual-axis live" claim, any FD004 improvement-percentage figures. See `AGENTS.md` for the full dead-numbers list and incident history behind each hard constraint.
