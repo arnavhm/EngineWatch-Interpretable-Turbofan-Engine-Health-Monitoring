@@ -13,8 +13,10 @@ everything else this session was: real output, not a claim.
 - [ ] **`ci-live-gate.yml` green for 5 consecutive scheduled runs**, not
       just the one manually-triggered run that proved it works. Five
       real runs, unattended, actually catching nothing wrong.
-- [ ] **Zero open Risk Register items above Low impact.** Check the
-      database directly, don't work from memory of what's open.
+- [ ] **Zero open Risk Register items with Status = Active and Impact above
+      Low.** 'Monitoring' status doesn't count against this — an ongoing
+      watched pattern with a real mitigation already in place is a healthy
+      steady-state, not a blocker.
 - [ ] **`.agents/test-prompts.md` all 5 tests run at least once** since
       the last `AGENTS.md` change, with real pass results shown.
 - [ ] **The Caddy `try_files` fix for `/engine/:id` hard-refresh** is

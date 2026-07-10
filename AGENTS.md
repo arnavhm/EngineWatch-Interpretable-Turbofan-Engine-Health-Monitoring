@@ -128,6 +128,21 @@ anything matching an existing gitignore pattern):
 RUL artifact files (`rul_artifacts.joblib`, 100–330MB) deploy via `rsync`,
 never `git` — they exceed GitHub's size limit and are gitignored intentionally.
 
+## 5a. Never run a wildcard/glob delete without checking what it actually matches
+
+`rm` doesn't know or care about tracked vs. untracked files — a glob meant
+to catch scratch files can just as easily match real, committed ones
+sitting in the same directory. This isn't hypothetical: a cleanup command
+using `tests/test_*.py` to remove six untracked scratch test files also
+matched and deleted 11 real, previously-committed test files with similar
+names, because the glob had no way to distinguish them. Before running any
+`rm` with a wildcard or glob pattern, run `git ls-files` filtered to the
+same pattern and confirm the result is exactly the set of files intended —
+if anything unexpected shows up as tracked, stop and use explicit filenames
+instead of the glob. This applies to whoever is issuing the command,
+including Claude when drafting a cleanup instruction for Antigravity to
+run — the instruction itself can be the bug, not just its execution.
+
 ## 6. Deploy verification gate
 
 Never report a deploy as verified using curl output alone. The full gate is:
