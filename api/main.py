@@ -172,7 +172,7 @@ async def get_trajectory(engine_id: int, dataset_id: str = "FD001"):
 
 
 @app.get("/sensors")
-async def get_sensors(engine_id: int, dataset_id: str = "FD001"):
+async def get_sensors(engine_id: int, dataset_id: str):
     key = f"{dataset_id}:{engine_id}"
     if key not in _sensor_cache:
         raise HTTPException(status_code=404, detail="Engine not found")

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { predictCsv } from '../api';
 import type { CsvPrediction } from '../types';
 
 const STATE_COLOR: Record<string, string> = {
@@ -7,7 +8,7 @@ const STATE_COLOR: Record<string, string> = {
   Critical: 'var(--color-critical)',
 };
 
-export default function CsvUpload() {
+export default function CsvUpload({ datasetId }: { datasetId: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,18 +21,7 @@ export default function CsvUpload() {
     setResults(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const BASE = import.meta.env.VITE_API_BASE;
-      const res = await fetch(`${BASE}/predict/csv?dataset_id=FD001`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`API error: ${res.status} — ${text}`);
-      }
-      const data = await res.json();
+      const data = await predictCsv(datasetId, file);
       setResults(data.predictions || []);
     } catch (err) {
       setError(String(err));
@@ -44,7 +34,7 @@ export default function CsvUpload() {
     <div className="flex flex-col gap-4">
       {/* Upload controls */}
       <div className="flex items-center gap-3">
-        <label className="flex-1 cursor-pointer">
+        <label htmlFor="csv-upload-input" className="flex-1 cursor-pointer">
           <div className={`flex items-center justify-center px-4 py-3 rounded-lg border border-dashed transition-colors ${
             file ? 'border-accent bg-accent/5 text-accent' : 'border-border text-muted hover:border-faint'
           }`}>
@@ -53,6 +43,7 @@ export default function CsvUpload() {
             </span>
           </div>
           <input
+            id="csv-upload-input"
             type="file"
             accept=".csv"
             className="hidden"

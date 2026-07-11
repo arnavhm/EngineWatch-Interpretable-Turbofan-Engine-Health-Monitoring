@@ -76,7 +76,7 @@ export default function FleetCommand({ selectedDataset, setSelectedDataset, onSe
           </Suspense>
         </Panel>
         <Panel title="CSV Batch Predict" className="md:col-span-2 lg:col-span-3">
-          <CsvUpload />
+          <CsvUpload datasetId={selectedDataset} />
         </Panel>
       </div>
     </main>

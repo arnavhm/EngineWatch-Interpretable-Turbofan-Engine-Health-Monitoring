@@ -107,3 +107,20 @@ export async function narrateChat(
   }
   return await res.json();
 }
+
+export async function predictCsv(datasetId: string, file: File) {
+  const url = `${BASE}/predict/csv?dataset_id=${datasetId}`;
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const res = await fetch(url, {
+    method: 'POST',
+    body: formData
+  });
+  
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API error: ${res.status} — ${text}`);
+  }
+  return await res.json();
+}
