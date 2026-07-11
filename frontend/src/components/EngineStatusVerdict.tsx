@@ -109,6 +109,11 @@ export default function EngineStatusVerdict({
       <div className="text-[10px] font-mono text-faint mt-3">
         {model_name} · RMSE {rmse.toFixed(2)}
       </div>
+      {datasetId === 'FD002' && (
+        <div className="text-[10px] text-faint mt-2 leading-relaxed">
+          * FD002 spans six operating regimes rather than one. This blurs the boundaries between degradation states more than in the single-regime datasets (FD001/FD003), producing a clustering silhouette score of 0.284 — below our 0.30 threshold. This is a disclosed limitation of the multi-regime setting, not a defect in the pipeline; risk-RUL Spearman correlation (−0.765) remains the primary, unaffected acceptance criterion.
+        </div>
+      )}
     </div>
   );
 }

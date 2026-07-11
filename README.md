@@ -104,9 +104,11 @@ Verified against `config/canonical_gate.json`, the single source of truth this r
 | Dataset | Model | RMSE | NASA Score | Risk–RUL Spearman |
 |---|---|---|---|---|
 | FD001 | HistGBR (monotonic) | 18.459 | 617.5 | **−0.750** |
-| FD002 | HistGBR (monotonic) | 31.125 | 13,635 | **−0.765** |
+| FD002* | HistGBR (monotonic) | 31.125 | 13,635 | **−0.765** |
 | FD003 | HistGBR (monotonic) | 22.798 | 1,995.7 | **−0.816** |
 | FD004 | HistGBR (monotonic) | 34.410 | 53,028 | **−0.736** |
+
+*\* FD002 spans six operating regimes rather than one. This blurs the boundaries between degradation states more than in the single-regime datasets (FD001/FD003), producing a clustering silhouette score of 0.284 — below our 0.30 threshold. This is a disclosed limitation of the multi-regime setting, not a defect in the pipeline; risk-RUL Spearman correlation (−0.765) remains the primary, unaffected acceptance criterion.*
 
 FD002 and FD004 are the harder datasets here, and the README says so on purpose — FD002's clustering silhouette (0.284) sits below the 0.30 target, disclosed as a known limitation rather than smoothed over. A system that only reports its best numbers isn't actually interpretable, it's just quieter about the parts that don't work as well.
 
