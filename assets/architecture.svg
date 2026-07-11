@@ -1,0 +1,173 @@
+<svg viewBox="0 0 1400 1000" xmlns="http://www.w3.org/2000/svg" font-family="'JetBrains Mono', 'SF Mono', Consolas, monospace">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4b5563"/>
+    </marker>
+    <linearGradient id="critical" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#991b1b"/>
+    </linearGradient>
+    <linearGradient id="healthy" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#16a34a"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="1000" fill="#0b1120"/>
+  <rect width="1400" height="1000" fill="url(#bgGrid)" opacity="0.4"/>
+  <pattern id="bgGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+  </pattern>
+  <rect width="1400" height="1000" fill="url(#bgGrid)"/>
+
+  <!-- Title -->
+  <text x="700" y="52" text-anchor="middle" fill="#f1f5f9" font-size="26" font-weight="700" letter-spacing="0.5">EngineWatch — Inference Pipeline</text>
+  <text x="700" y="78" text-anchor="middle" fill="#64748b" font-size="13" letter-spacing="1.5">RAW TELEMETRY → INTERPRETABLE RISK STATE, ZERO LIVE RECOMPUTE AT SERVE TIME</text>
+
+  <!-- Stage 1: Raw telemetry -->
+  <g filter="url(#softShadow)">
+    <rect x="80" y="130" width="260" height="90" rx="10" fill="#111827" stroke="#334155" stroke-width="1.5"/>
+  </g>
+  <text x="210" y="162" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">Raw Telemetry</text>
+  <text x="210" y="184" text-anchor="middle" fill="#94a3b8" font-size="11.5">26 sensor channels · FD001–FD004</text>
+  <text x="210" y="202" text-anchor="middle" fill="#64748b" font-size="10.5">NASA C-MAPSS turbofan run-to-failure</text>
+
+  <line x1="210" y1="220" x2="210" y2="256" stroke="#4b5563" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Stage 2: Preprocessing -->
+  <g filter="url(#softShadow)">
+    <rect x="80" y="258" width="260" height="90" rx="10" fill="#111827" stroke="#334155" stroke-width="1.5"/>
+  </g>
+  <text x="210" y="288" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">Preprocessing</text>
+  <text x="210" y="310" text-anchor="middle" fill="#94a3b8" font-size="11.5">Flat-sensor removal · StandardScaler</text>
+  <text x="210" y="330" text-anchor="middle" fill="#f59e0b" font-size="10.5" font-weight="600">RegimeScaler — load-bearing (FD002/FD004)</text>
+
+  <line x1="210" y1="348" x2="210" y2="384" stroke="#4b5563" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Stage 3: Feature engineering block -->
+  <g filter="url(#softShadow)">
+    <rect x="80" y="386" width="260" height="130" rx="10" fill="#111827" stroke="#334155" stroke-width="1.5"/>
+  </g>
+  <text x="210" y="414" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">Feature Engineering</text>
+  <line x1="105" y1="426" x2="315" y2="426" stroke="#1e293b" stroke-width="1"/>
+  <text x="105" y="448" fill="#cbd5e1" font-size="11.5">▸ PCA Health Index</text>
+  <text x="105" y="468" fill="#cbd5e1" font-size="11.5">▸ Health Velocity (rolling slope)</text>
+  <text x="105" y="488" fill="#cbd5e1" font-size="11.5">▸ Health Variability (rolling std)</text>
+  <text x="105" y="508" fill="#cbd5e1" font-size="11.5">▸ KMeans state (k=3)</text>
+
+  <line x1="210" y1="516" x2="210" y2="552" stroke="#4b5563" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Stage 4: Risk score -->
+  <g filter="url(#softShadow)">
+    <rect x="80" y="554" width="260" height="100" rx="10" fill="#111827" stroke="#334155" stroke-width="1.5"/>
+  </g>
+  <text x="210" y="584" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">Risk Score</text>
+  <text x="210" y="606" text-anchor="middle" fill="#94a3b8" font-size="11">d = 1 − HI_hpc, min-max normalized</text>
+  <text x="210" y="624" text-anchor="middle" fill="#64748b" font-size="10.5">fit on train only — no test leakage</text>
+  <text x="210" y="642" text-anchor="middle" fill="#64748b" font-size="10.5">HPC-only routing (all 4 datasets)</text>
+
+  <!-- Down to fault routing note (dead branch) -->
+  <line x1="340" y1="470" x2="410" y2="470" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <g filter="url(#softShadow)">
+    <rect x="412" y="424" width="240" height="92" rx="10" fill="#1c1108" stroke="#78350f" stroke-width="1.5" stroke-dasharray="5 3"/>
+  </g>
+  <text x="532" y="450" text-anchor="middle" fill="#fbbf24" font-size="12.5" font-weight="700">Fault-Mode Router</text>
+  <text x="532" y="470" text-anchor="middle" fill="#d1a75f" font-size="10.5">n_fault_modes_by_dataset = 1</text>
+  <text x="532" y="486" text-anchor="middle" fill="#92714a" font-size="10">Dual-axis (HPC+Fan) code exists,</text>
+  <text x="532" y="500" text-anchor="middle" fill="#92714a" font-size="10">verified correct, currently inert</text>
+
+  <line x1="340" y1="600" x2="410" y2="600" stroke="#4b5563" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Stage 5: RUL model -->
+  <g filter="url(#softShadow)">
+    <rect x="412" y="554" width="280" height="100" rx="10" fill="#0f1e14" stroke="#166534" stroke-width="1.5"/>
+  </g>
+  <text x="552" y="580" text-anchor="middle" fill="#86efac" font-size="15" font-weight="700">RUL Model</text>
+  <text x="552" y="600" text-anchor="middle" fill="#a7f0be" font-size="11">Monotonic HistGBR (sklearn 1.4.2)</text>
+  <text x="552" y="618" text-anchor="middle" fill="#6ee7a0" font-size="10">constraints: [HI:+, vel:0, var:−, risk:−]</text>
+  <text x="552" y="636" text-anchor="middle" fill="#4d9868" font-size="10">RandomForest → confidence intervals only</text>
+
+  <line x1="692" y1="604" x2="756" y2="604" stroke="#4b5563" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Stage 6: Artifact cache -->
+  <g filter="url(#softShadow)">
+    <rect x="758" y="554" width="260" height="100" rx="10" fill="#111827" stroke="#334155" stroke-width="1.5"/>
+  </g>
+  <text x="888" y="580" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">Artifact Cache</text>
+  <text x="888" y="600" text-anchor="middle" fill="#94a3b8" font-size="10.5">rul_artifacts.joblib per dataset</text>
+  <text x="888" y="618" text-anchor="middle" fill="#94a3b8" font-size="10.5">100–330MB · deployed via rsync</text>
+  <text x="888" y="636" text-anchor="middle" fill="#38bdf8" font-size="10.5" font-weight="600">O(1) dict lookup at serve time</text>
+
+  <line x1="888" y1="654" x2="888" y2="690" stroke="#4b5563" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Stage 7: FastAPI -->
+  <g filter="url(#softShadow)">
+    <rect x="758" y="692" width="260" height="90" rx="10" fill="#0c1e2e" stroke="#0e7490" stroke-width="1.5"/>
+  </g>
+  <text x="888" y="722" text-anchor="middle" fill="#67e8f9" font-size="15" font-weight="700">FastAPI Backend</text>
+  <text x="888" y="742" text-anchor="middle" fill="#a5e8f0" font-size="10.5">Zero live ML computation</text>
+  <text x="888" y="760" text-anchor="middle" fill="#5fb8c9" font-size="10">/predict · /sensors · /fleet/* · /narrate</text>
+
+  <line x1="1018" y1="737" x2="1082" y2="737" stroke="#4b5563" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Stage 8: Frontend -->
+  <g filter="url(#softShadow)">
+    <rect x="1084" y="692" width="236" height="90" rx="10" fill="#111827" stroke="#334155" stroke-width="1.5"/>
+  </g>
+  <text x="1202" y="722" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">React Frontend</text>
+  <text x="1202" y="742" text-anchor="middle" fill="#94a3b8" font-size="10.5">Fleet Command · Engine Drill-Down</text>
+  <text x="1202" y="760" text-anchor="middle" fill="#64748b" font-size="10">Vite · TypeScript · Tailwind</text>
+
+  <!-- Narration side branch -->
+  <line x1="888" y1="782" x2="888" y2="818" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <g filter="url(#softShadow)">
+    <rect x="758" y="820" width="260" height="80" rx="10" fill="#1a1330" stroke="#6d28d9" stroke-width="1.5" stroke-dasharray="5 3"/>
+  </g>
+  <text x="888" y="848" text-anchor="middle" fill="#c4b5fd" font-size="12.5" font-weight="700">Agentic Narration</text>
+  <text x="888" y="866" text-anchor="middle" fill="#a89ae0" font-size="10">Gemini 2.5 Flash · plain-language layer</text>
+  <text x="888" y="882" text-anchor="middle" fill="#7c6fa8" font-size="9.5">runtime only — never load-bearing</text>
+
+  <!-- Output badge -->
+  <g filter="url(#softShadow)">
+    <rect x="1084" y="130" width="236" height="220" rx="10" fill="#111827" stroke="#334155" stroke-width="1.5"/>
+  </g>
+  <text x="1202" y="160" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="700">Per-Engine Output</text>
+  <line x1="1104" y1="172" x2="1300" y2="172" stroke="#1e293b" stroke-width="1"/>
+
+  <circle cx="1116" cy="196" r="4" fill="#f97316"/>
+  <text x="1130" y="200" fill="#cbd5e1" font-size="10.5">Health Index</text>
+  <circle cx="1116" cy="220" r="4" fill="#f97316"/>
+  <text x="1130" y="224" fill="#cbd5e1" font-size="10.5">Risk Score [0,1]</text>
+  <circle cx="1116" cy="244" r="4" fill="#f97316"/>
+  <text x="1130" y="248" fill="#cbd5e1" font-size="10.5">RUL cycles + CI</text>
+  <circle cx="1116" cy="268" r="4" fill="#f97316"/>
+  <text x="1130" y="272" fill="#cbd5e1" font-size="10.5">Risk state label</text>
+  <circle cx="1116" cy="292" r="4" fill="#f97316"/>
+  <text x="1130" y="296" fill="#cbd5e1" font-size="10.5">Sensor contributions</text>
+  <circle cx="1116" cy="316" r="4" fill="#f97316"/>
+  <text x="1130" y="320" fill="#cbd5e1" font-size="10.5">Anomaly flag</text>
+
+  <line x1="1202" y1="350" x2="1202" y2="390" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <line x1="1202" y1="390" x2="340" y2="390" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <line x1="340" y1="390" x2="340" y2="401" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+  <text x="770" y="382" text-anchor="middle" fill="#475569" font-size="9.5" font-style="italic">informs feature set at training time</text>
+
+  <!-- Legend / footer -->
+  <line x1="80" y1="932" x2="1320" y2="932" stroke="#1e293b" stroke-width="1"/>
+  <g>
+    <rect x="80" y="950" width="10" height="10" rx="2" fill="#111827" stroke="#334155"/>
+    <text x="98" y="960" fill="#64748b" font-size="10.5">Core pipeline</text>
+    <rect x="230" y="950" width="10" height="10" rx="2" fill="#1c1108" stroke="#78350f" stroke-dasharray="3 2"/>
+    <text x="248" y="960" fill="#64748b" font-size="10.5">Inert / dead code path</text>
+    <rect x="410" y="950" width="10" height="10" rx="2" fill="#0f1e14" stroke="#166534"/>
+    <text x="428" y="960" fill="#64748b" font-size="10.5">Model layer</text>
+    <rect x="560" y="950" width="10" height="10" rx="2" fill="#0c1e2e" stroke="#0e7490"/>
+    <text x="578" y="960" fill="#64748b" font-size="10.5">Serving layer</text>
+    <rect x="700" y="950" width="10" height="10" rx="2" fill="#1a1330" stroke="#6d28d9" stroke-dasharray="3 2"/>
+    <text x="718" y="960" fill="#64748b" font-size="10.5">Non-load-bearing narration</text>
+  </g>
+  <text x="1320" y="960" text-anchor="end" fill="#334155" font-size="10">enginewatch.tech</text>
+</svg>
