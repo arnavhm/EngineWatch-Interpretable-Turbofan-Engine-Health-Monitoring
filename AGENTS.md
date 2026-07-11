@@ -63,22 +63,6 @@ correct venv isn't active, fix that first — or if it doesn't exist at all,
 say so and stop there rather than substituting whatever venv happens to be
 active.
 
-**Never reuse a shell session where `source .../activate` previously
-failed.** Stale environment variables from that session corrupt every
-subsequent `which python` / `pip show` output in it — the shell will look
-activated without actually being activated. Abandon the session entirely
-and open a fresh terminal rather than re-running the check in place. This
-almost caused a real incident during an overnight Cowork session: a failed
-`activate` was followed by `pip show` in the same shell, which reported
-scikit-learn 1.8.0 / numpy 2.4.3 / joblib 1.5.3 — base miniforge's
-versions, not `.venvs/project-2`'s — with no error at any step. It read as
-a normal, if wrong, confirmation. This applies to a human running commands
-directly in a terminal exactly as much as it applies to an agent.
-
-This is the sixth confirmed instance of some variant of "wrong/missing
-venv produces a normal-looking result" on this project. Treat it as a
-standing hazard, not a one-off.
-
 ## 3. No silent fallback logic, anywhere
 
 This applies beyond artifact loading. If a value can't be resolved as
