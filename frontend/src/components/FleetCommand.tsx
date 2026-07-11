@@ -1,11 +1,13 @@
 import { lazy, Suspense } from 'react';
 import DatasetSelector from './DatasetSelector';
+import EngineSelector from './EngineSelector';
 import FleetCompareTable from './FleetCompareTable';
 import FleetSummary from './FleetSummary';
 import TopRiskTable from './TopRiskTable';
 import CsvUpload from './CsvUpload';
 import PanelState from './PanelState';
 import { useFleetAnalytics } from '../hooks/useFleetAnalytics';
+import { useAnomaly } from '../hooks/useAnomaly';
 
 const RiskHistogramChart = lazy(() => import('./RiskHistogramChart'));
 const FleetTrendChart = lazy(() => import('./FleetTrendChart'));
@@ -28,11 +30,18 @@ function Panel({ title, children, className = '' }: { title: string; children?: 
 
 export default function FleetCommand({ selectedDataset, setSelectedDataset, onSelectEngine }: FleetCommandProps) {
   const { data: fleetData, loading: fleetLoading, error: fleetError } = useFleetAnalytics(selectedDataset);
+  const { data: anomalyData, loading: anomalyLoading, error: anomalyError } = useAnomaly(selectedDataset);
 
   return (
     <main className="w-full max-w-[1180px] mx-auto px-4 sm:px-6">
-      <div className="py-6 mb-2">
+      <div className="py-6 mb-2 flex flex-col sm:flex-row gap-4">
         <DatasetSelector selectedDataset={selectedDataset} setSelectedDataset={setSelectedDataset} />
+        <EngineSelector
+          points={anomalyData}
+          loading={anomalyLoading}
+          error={anomalyError}
+          onSelectEngine={onSelectEngine}
+        />
       </div>
 
       <h2 className="text-xl font-bold text-text mb-4 uppercase tracking-wide">Fleet Command</h2>
@@ -58,7 +67,12 @@ export default function FleetCommand({ selectedDataset, setSelectedDataset, onSe
         </Panel>
         <Panel title="Fleet Anomaly" className="md:col-span-2 lg:col-span-3">
           <Suspense fallback={<PanelState loading={true}><div /></PanelState>}>
-            <AnomalyScatter datasetId={selectedDataset} />
+            <AnomalyScatter
+              data={anomalyData}
+              loading={anomalyLoading}
+              error={anomalyError}
+              onSelectEngine={onSelectEngine}
+            />
           </Suspense>
         </Panel>
         <Panel title="CSV Batch Predict" className="md:col-span-2 lg:col-span-3">

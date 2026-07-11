@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useAnomaly } from '../hooks/useAnomaly';
 import PanelState from './PanelState';
+import type { AnomalyPoint } from '../types';
 
 interface AnomalyScatterProps {
-  datasetId: string;
+  data: AnomalyPoint[] | null;
+  loading: boolean;
+  error: string | null;
+  onSelectEngine: (id: number) => void;
 }
 
 const STATE_COLOR: Record<string, string> = {
@@ -29,8 +32,11 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-export default function AnomalyScatter({ datasetId }: AnomalyScatterProps) {
-  const { data, loading, error } = useAnomaly(datasetId);
+export default function AnomalyScatter({ data, loading, error, onSelectEngine }: AnomalyScatterProps) {
+  const handlePointClick = (point: any) => {
+    const engineId = point?.payload?.engine_id ?? point?.engine_id;
+    if (typeof engineId === 'number') onSelectEngine(engineId);
+  };
 
   const { normal, anomalies } = useMemo(() => {
     if (!data) return { normal: [], anomalies: [] };
@@ -68,23 +74,40 @@ export default function AnomalyScatter({ datasetId }: AnomalyScatterProps) {
             />
             <Tooltip content={<CustomTooltip />} />
             {/* Normal engines — colored by risk_state */}
-            <Scatter name="Normal" data={normal} fill="var(--color-muted)">
+            <Scatter
+              name="Normal"
+              data={normal}
+              fill="var(--color-muted)"
+              onClick={handlePointClick}
+              className="cursor-pointer"
+            >
               {normal.map((entry, i) => (
                 <Cell
                   key={`normal-${i}`}
                   fill={STATE_COLOR[entry.risk_state] || 'var(--color-muted)'}
                   opacity={0.6}
+                  className="cursor-pointer hover:opacity-100"
                 />
               ))}
             </Scatter>
             {/* Anomalous engines — red diamonds */}
-            <Scatter name="Anomaly" data={anomalies} fill="var(--color-critical)" shape="diamond">
+            <Scatter
+              name="Anomaly"
+              data={anomalies}
+              fill="var(--color-critical)"
+              shape="diamond"
+              onClick={handlePointClick}
+              className="cursor-pointer"
+            >
               {anomalies.map((_, i) => (
-                <Cell key={`anom-${i}`} fill="var(--color-critical)" opacity={1} />
+                <Cell key={`anom-${i}`} fill="var(--color-critical)" opacity={1} className="cursor-pointer" />
               ))}
             </Scatter>
           </ScatterChart>
         </ResponsiveContainer>
+      </div>
+      <div className="mt-2 text-center text-xs text-muted">
+        Each point is an engine — click one to open its drill-down.
       </div>
     </PanelState>
   );
