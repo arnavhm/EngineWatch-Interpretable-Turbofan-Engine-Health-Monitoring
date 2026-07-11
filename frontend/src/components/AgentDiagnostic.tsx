@@ -14,7 +14,7 @@ export default function AgentDiagnostic({ engineId, datasetId }: { engineId: num
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <div className="bg-[#E0533A]/10 border border-[#E0533A]/30 text-[#E0533A] text-xs p-2 rounded">Error: {error}</div>}
+      {error && <div className="bg-critical/10 border border-critical/30 text-critical text-xs p-2 rounded">Error: {error}</div>}
       {loading && <div className="text-muted text-sm italic">Generating diagnostic…</div>}
       {reply && <p className="text-sm leading-relaxed text-text whitespace-pre-wrap">{reply}</p>}
     </div>

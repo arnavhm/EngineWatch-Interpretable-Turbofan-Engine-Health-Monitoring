@@ -25,7 +25,7 @@ export default function VelocityPanel({ engineId, datasetId }: VelocityPanelProp
         <div className="bg-panel2 border border-border p-2 rounded shadow-md text-xs font-mono">
           <p className="text-muted mb-1">Cycle: {label}</p>
           <p className="text-text">
-            Velocity: <span className="text-[#E0533A] font-bold">{payload[0].value.toExponential(2)}</span>
+            Velocity: <span className="text-accent font-bold">{payload[0].value.toExponential(2)}</span>
           </p>
         </div>
       );
@@ -41,8 +41,8 @@ export default function VelocityPanel({ engineId, datasetId }: VelocityPanelProp
             <AreaChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorVelocity" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#E0533A" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#E0533A" stopOpacity={0.0}/>
+                  <stop offset="5%" stopColor="var(--color-accent)" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="var(--color-accent)" stopOpacity={0.0}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
@@ -64,12 +64,12 @@ export default function VelocityPanel({ engineId, datasetId }: VelocityPanelProp
               
               <ReferenceLine y={0} stroke="var(--color-muted)" strokeDasharray="3 3" />
               
-              <Area 
-                type="monotone" 
-                dataKey="velocity" 
-                stroke="#E0533A" 
-                fillOpacity={1} 
-                fill="url(#colorVelocity)" 
+              <Area
+                type="monotone"
+                dataKey="velocity"
+                stroke="var(--color-accent)"
+                fillOpacity={1}
+                fill="url(#colorVelocity)"
                 isAnimationActive={false}
               />
             </AreaChart>

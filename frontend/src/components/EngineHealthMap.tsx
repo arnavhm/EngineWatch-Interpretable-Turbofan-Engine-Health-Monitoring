@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useContributions } from '../hooks/useContributions';
 import PanelState from './PanelState';
+import type { ModuleHeat } from '../types';
 
 interface EngineHealthMapProps {
   engineId: number;
@@ -43,42 +44,64 @@ const API_MAP: Record<string, string> = {
 export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMapProps) {
   const { data, loading, error } = useContributions(engineId, datasetId);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [hoveredZone, setHoveredZone] = useState<string | null>(null);
+
+  const findModule = (zone: string): ModuleHeat | undefined => {
+    if (!data) return undefined;
+    const apiKey = API_MAP[zone];
+    if (!apiKey) return undefined;
+    return data.modules.find(m => m.module.toLowerCase() === apiKey.toLowerCase());
+  };
+
+  // First zone key whose API_MAP value matches the dominant module (e.g. 'hpc' not 'comb').
+  const dominantZoneKey = data
+    ? Object.keys(API_MAP).find(
+        zone => API_MAP[zone] && API_MAP[zone].toLowerCase() === data.dominant_module.toLowerCase()
+      ) ?? null
+    : null;
 
   const getZoneColor = (zone: string, isSelected: boolean) => {
     if (!data) return { fill: 'transparent', stroke: 'transparent' };
     const apiKey = API_MAP[zone];
-    
-    // Base colors
-    let r = 111, g = 168, b = 216; // default blueish
+
+    // Base colors — inactive/no-data is neutral grey-blue, not amber (amber reserved for variability caution)
+    let r = 136, g = 150, b = 163; // #8896A3
     let alpha = 0;
     let stroke = 'transparent';
-    
+
     if (apiKey) {
-      const mod = data.modules.find(m => m.module.toLowerCase() === apiKey.toLowerCase());
+      const mod = findModule(zone);
       if (mod) {
-        // Color by direction
         if (mod.direction === 'critical') {
-          r = 224; g = 83; b = 58; // #E0533A
+          r = 255; g = 90; b = 95; // #FF5A5F
         } else if (mod.direction === 'healthy') {
-          r = 62; g = 207; b = 142; // #3ECF8E
+          r = 45; g = 212; b = 167; // #2DD4A7
         } else {
-          r = 224; g = 169; b = 58; // #E0A93A degrading
+          r = 136; g = 150; b = 163; // inactive — neutral
         }
-        
-        alpha = mod.norm_magnitude * 0.6; // Scale opacity by severity
-        
-        if (data.dominant_module.toLowerCase() === apiKey.toLowerCase()) {
+
+        alpha = mod.direction === 'inactive'
+          ? mod.norm_magnitude * 0.25
+          : mod.norm_magnitude * 0.6; // Scale opacity by severity
+
+        if (dominantZoneKey === zone) {
           stroke = `rgba(${r},${g},${b}, 1)`;
           alpha = Math.max(alpha, 0.3); // Ensure visible
         }
       }
     }
-    
+
+    const isHovered = hoveredZone === zone && !isSelected;
+    if (isHovered) {
+      alpha = Math.max(alpha + 0.18, 0.15);
+      stroke = 'rgba(230,237,243,0.45)';
+    }
+
     if (isSelected) {
       alpha = Math.min(alpha + 0.2, 0.8);
       stroke = stroke === 'transparent' ? 'rgba(255,255,255,0.3)' : stroke;
     }
-    
+
     return {
       fill: `rgba(${r},${g},${b},${alpha})`,
       stroke,
@@ -89,14 +112,39 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
   };
 
   const renderPaths = () => {
-    return Object.entries(SVG_PATHS).map(([zone, pathData]) => (
+    const paths = Object.entries(SVG_PATHS).map(([zone, pathData]) => (
       <path
         key={zone}
         d={pathData}
         style={getZoneColor(zone, selectedZone === zone)}
         onClick={() => setSelectedZone(prev => prev === zone ? null : zone)}
+        onMouseEnter={() => setHoveredZone(zone)}
+        onMouseLeave={() => setHoveredZone(prev => (prev === zone ? null : prev))}
       />
     ));
+
+    if (dominantZoneKey && data) {
+      const dominantMod = findModule(dominantZoneKey);
+      const outlineColor = dominantMod
+        ? (dominantMod.direction === 'critical'
+            ? 'var(--color-critical)'
+            : dominantMod.direction === 'healthy'
+              ? 'var(--color-healthy)'
+              : 'var(--color-muted)')
+        : 'var(--color-critical)';
+      paths.push(
+        <path
+          key={`${dominantZoneKey}-pulse`}
+          d={SVG_PATHS[dominantZoneKey]}
+          fill="none"
+          stroke={outlineColor}
+          strokeWidth={2.2}
+          className="animate-pulse pointer-events-none"
+        />
+      );
+    }
+
+    return paths;
   };
 
   // Find info for the details panel
@@ -123,18 +171,26 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
           <span className="text-xl font-bold text-accent">{mod ? mod.display_name : staticInfo.name}</span>
           <span className="text-xs text-muted font-mono bg-panel border border-border px-2 py-1 rounded">{staticInfo.spool}</span>
           {mod && (
-            <span className={`text-xs font-bold px-2 py-1 rounded ${mod.direction === 'critical' ? 'bg-[#E0533A]/20 text-[#E0533A]' : (mod.direction === 'healthy' ? 'bg-[#3ECF8E]/20 text-[#3ECF8E]' : 'bg-[#E0A93A]/20 text-[#E0A93A]')}`}>
-              {mod.direction.toUpperCase()}
+            <span
+              className={`text-xs font-bold px-2 py-1 rounded ${
+                mod.direction === 'critical'
+                  ? 'bg-critical/20 text-critical'
+                  : mod.direction === 'healthy'
+                    ? 'bg-healthy/20 text-healthy'
+                    : 'bg-panel border border-border text-muted'
+              }`}
+            >
+              {mod.direction === 'inactive' ? 'INACTIVE' : mod.direction.toUpperCase()}
             </span>
           )}
         </div>
-        
+
         {isDominant && data && (
-          <div className="text-xs text-[#E0533A] font-medium border-l-2 border-[#E0533A] pl-2 mb-2">
+          <div className="text-xs text-critical font-medium border-l-2 border-critical pl-2 mb-2">
             {data.dominant_driver_text}
           </div>
         )}
-        
+
         {mod && mod.active_sensors && mod.active_sensors.length > 0 ? (
           <div className="mt-2">
             <div className="text-xs text-muted mb-1 font-bold uppercase tracking-wider">Active Sensors</div>
@@ -145,7 +201,7 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
                     <span className="font-mono font-bold">{s.symbol}</span>
                     <span className="text-muted text-xs truncate max-w-[150px]">{s.description}</span>
                   </div>
-                  <span className={`font-mono font-bold ${s.signed_contribution < 0 ? 'text-[#E0533A]' : 'text-[#3ECF8E]'}`}>
+                  <span className={`font-mono font-bold ${s.signed_contribution < 0 ? 'text-critical' : 'text-healthy'}`}>
                     {s.signed_contribution > 0 ? '+' : ''}{s.signed_contribution.toFixed(2)}
                   </span>
                 </div>
@@ -162,14 +218,36 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
   } else {
     panelContent = (
       <div className="flex items-center justify-center h-full text-muted text-sm font-mono opacity-50 p-6 text-center">
-        Click a section of the engine to inspect its live health contribution.
+        Tap a section of the engine to inspect its live health contribution.
       </div>
     );
   }
 
+  const dominantMod = dominantZoneKey ? findModule(dominantZoneKey) : undefined;
+  const dominantChipColor = dominantMod
+    ? (dominantMod.direction === 'critical'
+        ? 'border-critical/60 text-critical'
+        : dominantMod.direction === 'healthy'
+          ? 'border-healthy/60 text-healthy'
+          : 'border-border text-muted')
+    : 'border-border text-muted';
+
   return (
     <PanelState loading={loading} error={error}>
       <div className="w-full flex flex-col gap-4">
+        {data && dominantMod && dominantZoneKey && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-muted">
+              DIAGNOSIS POINTS TO
+            </span>
+            <button
+              onClick={() => setSelectedZone(dominantZoneKey)}
+              className={`text-xs font-mono font-bold px-2 py-1 rounded border cursor-pointer transition-colors ${dominantChipColor}`}
+            >
+              {dominantMod.display_name}
+            </button>
+          </div>
+        )}
         <div className="w-full rounded-lg bg-[#080E18] overflow-hidden border border-[#16202E]">
                 <svg width="100%" viewBox="0 0 690 330" role="img" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
         <title>2-spool turbofan engine cross-section</title>
@@ -355,7 +433,12 @@ export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMap
       </svg>
 
         </div>
-        
+
+        <div className="text-[11px] text-faint">
+          Zone colors show each section's contribution to this engine's health decline — not a
+          live alarm. Illustration colors (hot/cold) are physical, not status.
+        </div>
+
         <div className="min-h-[260px] max-h-[300px] overflow-y-auto border border-border rounded-lg bg-panel">
           {panelContent}
         </div>

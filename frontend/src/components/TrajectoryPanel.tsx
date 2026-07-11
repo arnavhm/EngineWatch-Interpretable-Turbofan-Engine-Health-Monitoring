@@ -94,10 +94,10 @@ export default function TrajectoryPanel({ engineId, datasetId }: TrajectoryPanel
               {/* Critical threshold line */}
               <ReferenceLine
                 y={0.3}
-                stroke="#ef4444"
+                stroke="var(--color-critical)"
                 strokeDasharray="5 3"
                 strokeWidth={1.5}
-                label={{ value: "Critical", position: "insideTopRight", fill: "#ef4444", fontSize: 10 }}
+                label={{ value: "Critical", position: "insideTopRight", fill: "var(--color-critical)", fontSize: 10 }}
               />
 
               {lastPoint && (
@@ -135,7 +135,7 @@ export default function TrajectoryPanel({ engineId, datasetId }: TrajectoryPanel
                 type="monotone"
                 dataKey="hi_rolling_mean"
                 name="Rolling Mean (10 cy)"
-                stroke="#a78bfa"
+                stroke="var(--color-accent)"
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
