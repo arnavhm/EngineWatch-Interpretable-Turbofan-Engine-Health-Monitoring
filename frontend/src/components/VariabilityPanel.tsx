@@ -1,15 +1,15 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useTrajectory } from '../hooks/useTrajectory';
 import PanelState from './PanelState';
+import type { TrajectoryResponse } from '../types';
 
 interface VariabilityPanelProps {
-  engineId: number;
-  datasetId: string;
+  data: TrajectoryResponse | null;
+  loading: boolean;
+  error: string | null;
 }
 
-export default function VariabilityPanel({ engineId, datasetId }: VariabilityPanelProps) {
-  const { data, loading, error } = useTrajectory(engineId, datasetId);
+export default function VariabilityPanel({ data, loading, error }: VariabilityPanelProps) {
 
   const chartData = React.useMemo(() => {
     if (!data) return [];

@@ -1,13 +1,15 @@
 
-import { useContributions } from '../hooks/useContributions';
-import { useTrajectory } from '../hooks/useTrajectory';
 import { STATE_TEXT } from '../stateColors';
-import type { PredictResponse } from '../types';
+import type { PredictResponse, ContributionsResponse, TrajectoryResponse } from '../types';
 
 interface EngineStatusVerdictProps {
   data: PredictResponse;
   engineId: number;
   datasetId: string;
+  contributions: ContributionsResponse | null;
+  contributionsLoading: boolean;
+  trajectory: TrajectoryResponse | null;
+  trajectoryLoading: boolean;
 }
 
 const BORDER_COLORS: Record<string, string> = {
@@ -16,10 +18,15 @@ const BORDER_COLORS: Record<string, string> = {
   Healthy: 'border-l-healthy',
 };
 
-export default function EngineStatusVerdict({ data, engineId, datasetId }: EngineStatusVerdictProps) {
-  const { data: cData, loading: cLoading } = useContributions(engineId, datasetId);
-  const { data: tData, loading: tLoading } = useTrajectory(engineId, datasetId);
-
+export default function EngineStatusVerdict({
+  data,
+  engineId,
+  datasetId,
+  contributions: cData,
+  contributionsLoading: cLoading,
+  trajectory: tData,
+  trajectoryLoading: tLoading,
+}: EngineStatusVerdictProps) {
   if (cLoading || tLoading) {
     return <div className="animate-pulse bg-panel2 h-32 rounded-lg border border-border"></div>;
   }

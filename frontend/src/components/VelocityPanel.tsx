@@ -1,15 +1,15 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { useTrajectory } from '../hooks/useTrajectory';
 import PanelState from './PanelState';
+import type { TrajectoryResponse } from '../types';
 
 interface VelocityPanelProps {
-  engineId: number;
-  datasetId: string;
+  data: TrajectoryResponse | null;
+  loading: boolean;
+  error: string | null;
 }
 
-export default function VelocityPanel({ engineId, datasetId }: VelocityPanelProps) {
-  const { data, loading, error } = useTrajectory(engineId, datasetId);
+export default function VelocityPanel({ data, loading, error }: VelocityPanelProps) {
 
   const chartData = React.useMemo(() => {
     if (!data) return [];

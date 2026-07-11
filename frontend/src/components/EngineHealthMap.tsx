@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useContributions } from '../hooks/useContributions';
 import PanelState from './PanelState';
-import type { ModuleHeat } from '../types';
+import type { ModuleHeat, ContributionsResponse } from '../types';
 
 interface EngineHealthMapProps {
-  engineId: number;
-  datasetId: string;
+  contributions: ContributionsResponse | null;
+  loading: boolean;
+  error: string | null;
 }
 
 const STATIC_BLURBS: Record<string, any> = {
@@ -41,8 +41,7 @@ const API_MAP: Record<string, string> = {
   bypass: 'bypass'
 };
 
-export default function EngineHealthMap({ engineId, datasetId }: EngineHealthMapProps) {
-  const { data, loading, error } = useContributions(engineId, datasetId);
+export default function EngineHealthMap({ contributions: data, loading, error }: EngineHealthMapProps) {
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
 

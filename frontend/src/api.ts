@@ -85,16 +85,10 @@ export async function getFleetCompare(): Promise<FleetCompareRow[]> {
 
 export async function getContributions(
   engineId: number,
-  datasetId: string = "FD001",
+  datasetId: string,
 ): Promise<ContributionsResponse> {
-  const res = await fetch(
-    `/api/predict/${engineId}/contributions?dataset_id=${datasetId}`,
-  );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? `HTTP ${res.status}`);
-  }
-  return res.json();
+  const params = new URLSearchParams({ dataset_id: datasetId });
+  return fetchJson<ContributionsResponse>(`/predict/${engineId}/contributions?${params.toString()}`);
 }
 
 export async function narrateChat(

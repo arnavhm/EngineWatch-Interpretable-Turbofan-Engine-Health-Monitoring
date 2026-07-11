@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceArea, Tooltip } from 'recharts';
 import { useSensors } from '../hooks/useSensors';
-import { useContributions } from '../hooks/useContributions';
 import PanelState from './PanelState';
 
 function rollingMean(values: number[], window: number): (number | null)[] {
@@ -15,11 +14,11 @@ function rollingMean(values: number[], window: number): (number | null)[] {
 interface SensorAccordionProps {
   engineId: number;
   datasetId: string;
+  dominantDriverText: string | null;
 }
 
-export default function SensorAccordion({ engineId, datasetId }: SensorAccordionProps) {
+export default function SensorAccordion({ engineId, datasetId, dominantDriverText }: SensorAccordionProps) {
   const { data: sData, loading: sLoading, error: sError } = useSensors(engineId, datasetId);
-  const { data: cData, loading: cLoading, error: cError } = useContributions(engineId, datasetId);
 
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
@@ -49,9 +48,9 @@ export default function SensorAccordion({ engineId, datasetId }: SensorAccordion
 
   const sortedSensors = useMemo(() => {
     if (!sData || !sData.sensors) return [];
-    
-    const dominantText = cData?.dominant_driver_text || "";
-    
+
+    const dominantText = dominantDriverText ?? "";
+
     const entries = Object.entries(sData.sensors).map(([symbol, meta]) => ({
       symbol,
       ...meta
@@ -60,25 +59,25 @@ export default function SensorAccordion({ engineId, datasetId }: SensorAccordion
     entries.sort((a, b) => {
       const aIsDriver = dominantText.includes(a.symbol);
       const bIsDriver = dominantText.includes(b.symbol);
-      
+
       if (aIsDriver && !bIsDriver) return -1;
       if (!aIsDriver && bIsDriver) return 1;
-      
+
       if (a.confirmed && !b.confirmed) return -1;
       if (!a.confirmed && b.confirmed) return 1;
-      
+
       return a.symbol.localeCompare(b.symbol);
     });
 
     return entries;
-  }, [sData, cData]);
+  }, [sData, dominantDriverText]);
 
-  if (sLoading || cLoading) {
+  if (sLoading) {
     return <div className="animate-pulse bg-panel2 h-32 rounded border border-border"></div>;
   }
 
-  if (sError || cError) {
-    return <PanelState loading={false} error={sError || cError}><div/></PanelState>;
+  if (sError) {
+    return <PanelState loading={false} error={sError}><div/></PanelState>;
   }
 
   if (!sData) return null;
@@ -94,9 +93,11 @@ export default function SensorAccordion({ engineId, datasetId }: SensorAccordion
         
         return (
           <div key={sensor.symbol} className="border border-border rounded-lg bg-panel overflow-hidden">
-            <button 
+            <button
               className="w-full flex items-center justify-between p-3 hover:bg-panel2 transition-colors text-left"
               onClick={() => toggle(sensor.symbol)}
+              aria-expanded={isExpanded}
+              aria-label={`${sensor.symbol} sensor details`}
             >
               <div className="flex items-center gap-2">
                 <span className="text-muted font-mono w-4">{isExpanded ? '▼' : '▶'}</span>
@@ -106,8 +107,8 @@ export default function SensorAccordion({ engineId, datasetId }: SensorAccordion
               </div>
               <div>
                 {sensor.confirmed ? (
-                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-[#3ECF8E]/20 text-[#3ECF8E] border border-[#3ECF8E]/30">
-                    ✅ Confirmed · {sensor.module}
+                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-accent/15 text-accent border border-accent/30">
+                    Confirmed · {sensor.module}
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-panel2 text-muted border border-border">
@@ -179,7 +180,7 @@ export default function SensorAccordion({ engineId, datasetId }: SensorAccordion
                   <p className="text-text font-medium">{sensor.layman_text}</p>
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`font-bold ${sensor.signal_direction === 'falling' || sensor.signal_direction === 'decreasing' ? 'text-[#E0533A]' : 'text-[#3ECF8E]'}`}>
+                  <span className="font-bold text-accent">
                     {sensor.signal_direction === 'falling' || sensor.signal_direction === 'decreasing' ? '↓' : '↑'}
                   </span>
                   <span className="text-sm text-muted">

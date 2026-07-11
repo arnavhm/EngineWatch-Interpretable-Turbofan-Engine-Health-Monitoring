@@ -1,7 +1,7 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceArea, ReferenceLine, ReferenceDot, ResponsiveContainer } from 'recharts';
-import { useTrajectory } from '../hooks/useTrajectory';
 import PanelState from './PanelState';
+import type { TrajectoryResponse } from '../types';
 
 function rollingMean(values: number[], window: number): (number | null)[] {
   return values.map((_, i) => {
@@ -12,12 +12,12 @@ function rollingMean(values: number[], window: number): (number | null)[] {
 }
 
 interface TrajectoryPanelProps {
-  engineId: number;
-  datasetId: string;
+  data: TrajectoryResponse | null;
+  loading: boolean;
+  error: string | null;
 }
 
-export default function TrajectoryPanel({ engineId, datasetId }: TrajectoryPanelProps) {
-  const { data, loading, error } = useTrajectory(engineId, datasetId);
+export default function TrajectoryPanel({ data, loading, error }: TrajectoryPanelProps) {
 
   // Transform data into Recharts format, with 10-cycle rolling mean
   const chartData = React.useMemo(() => {

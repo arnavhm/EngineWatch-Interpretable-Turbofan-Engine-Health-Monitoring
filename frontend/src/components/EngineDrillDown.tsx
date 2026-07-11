@@ -5,6 +5,8 @@ import EngineHealthMap from './EngineHealthMap';
 import StatStrip from './StatStrip';
 import PanelState from './PanelState';
 import { usePredict } from '../hooks/usePredict';
+import { useContributions } from '../hooks/useContributions';
+import { useTrajectory } from '../hooks/useTrajectory';
 import type { RiskState } from '../types';
 
 const TrajectoryPanel = lazy(() => import('./TrajectoryPanel'));
@@ -33,10 +35,12 @@ const NARRATION_QUESTION: Record<RiskState, string> = {
 export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineDrillDownProps) {
   const [devMode, setDevMode] = useState(false);
   const { data: engineData, loading: engineLoading } = usePredict(engineId, datasetId);
+  const { data: contribData, loading: contribLoading, error: contribError } = useContributions(engineId, datasetId);
+  const { data: trajData, loading: trajLoading, error: trajError } = useTrajectory(engineId, datasetId);
 
   if (engineLoading || !engineData) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
+      <div className="h-screen w-screen flex items-center justify-center bg-bg">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-muted"></div>
       </div>
     );
@@ -63,7 +67,15 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
           ← Back to Fleet Command
         </button>
 
-        <EngineStatusVerdict data={engineData} engineId={engineId} datasetId={datasetId} />
+        <EngineStatusVerdict
+          data={engineData}
+          engineId={engineId}
+          datasetId={datasetId}
+          contributions={contribData}
+          contributionsLoading={contribLoading}
+          trajectory={trajData}
+          trajectoryLoading={trajLoading}
+        />
 
         <div>
           <div className="text-sm font-semibold text-text border-b border-border pb-2">
@@ -90,6 +102,8 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
       </div>
 
       <div className="h-screen overflow-y-auto p-6 flex flex-col gap-5">
+        <StatStrip data={engineData} />
+
         <div className="flex items-center justify-between">
           <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-muted">
             ENGINE HEALTH MAP
@@ -97,12 +111,8 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
           <div className="text-xs text-muted">◉ Tap any engine section to inspect it</div>
         </div>
 
-        <PanelState loading={engineLoading || !engineData} error={null}>
-          {engineData && <StatStrip data={engineData} />}
-        </PanelState>
-
         <div className="flex-1">
-          <EngineHealthMap engineId={engineId} datasetId={datasetId} />
+          <EngineHealthMap contributions={contribData} loading={contribLoading} error={contribError} />
         </div>
 
         <button
@@ -120,7 +130,7 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
                 HEALTH TRAJECTORY
               </div>
               <Suspense fallback={<PanelState loading={true}><div /></PanelState>}>
-                <TrajectoryPanel engineId={engineId} datasetId={datasetId} />
+                <TrajectoryPanel data={trajData} loading={trajLoading} error={trajError} />
               </Suspense>
             </div>
 
@@ -129,7 +139,7 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
                 DEGRADATION SPEED
               </div>
               <Suspense fallback={<PanelState loading={true}><div /></PanelState>}>
-                <VelocityPanel engineId={engineId} datasetId={datasetId} />
+                <VelocityPanel data={trajData} loading={trajLoading} error={trajError} />
               </Suspense>
             </div>
 
@@ -138,7 +148,7 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
                 SIGNAL STABILITY
               </div>
               <Suspense fallback={<PanelState loading={true}><div /></PanelState>}>
-                <VariabilityPanel engineId={engineId} datasetId={datasetId} />
+                <VariabilityPanel data={trajData} loading={trajLoading} error={trajError} />
               </Suspense>
             </div>
 
@@ -147,7 +157,11 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
                 SENSOR DETAILS
               </div>
               <Suspense fallback={<PanelState loading={true}><div /></PanelState>}>
-                <SensorAccordion engineId={engineId} datasetId={datasetId} />
+                <SensorAccordion
+                  engineId={engineId}
+                  datasetId={datasetId}
+                  dominantDriverText={contribData?.dominant_driver_text ?? null}
+                />
               </Suspense>
             </div>
           </div>
