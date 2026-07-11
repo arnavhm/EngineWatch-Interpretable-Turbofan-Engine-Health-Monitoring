@@ -1,76 +1,116 @@
-# EngineWatch — Interpretable Turbofan Engine Health Monitoring
+<div align="center">
 
-> Deployed predictive maintenance system for NASA CMAPSS turbofan engines.
-> Interpretable ML, zero-live-recompute API, full CI automation — no deep learning, full diagnostic chain.
+# ⚙️ EngineWatch
 
-**Live at:** [enginewatch.tech](https://enginewatch.tech)
+### Interpretable Turbofan Engine Health Monitoring & RUL Prediction
 
----
+[![Live](https://img.shields.io/badge/live-enginewatch.tech-16a34a?style=flat-square)](https://enginewatch.tech)
+[![Python](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4.2-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-frontend-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![No Deep Learning](https://img.shields.io/badge/deep%20learning-none%2C%20on%20purpose-dc2626?style=flat-square)]()
+[![License](https://img.shields.io/badge/license-MIT-gray?style=flat-square)]()
 
-## What This System Does
+</div>
 
-EngineWatch monitors turbofan engine degradation and predicts Remaining Useful Life (RUL) using an interpretable pipeline grounded in aerospace physics, across all four NASA CMAPSS datasets (FD001–FD004). Given per-cycle engine telemetry, the system produces:
+<br/>
 
-- A **Health Index** tracking degradation from healthy to critical
-- **Health Velocity** — rate of decline per cycle
-- **Health Variability** — instability signal preceding failure
-- **Cluster-based health state** — Healthy / Degrading / Critical (KMeans, k=3)
-- **Continuous Risk Score** — normalized distance metric, fit on train only
-- **RUL Prediction** with confidence intervals (RandomForest tree variance)
-- **Sensor contribution breakdown** — which sensors are driving degradation
-- **Anomaly detection** — flags engines outside the training distribution
-- **Fleet-level analytics** — cross-engine risk ranking, trend analysis, handover summaries
-- **Agentic narration** — plain-language diagnostic explanations per engine (Gemini 2.5 Flash runtime, never load-bearing for correctness)
+## The problem
 
-Every prediction is served from pre-computed cached artifacts — the API layer performs zero live ML computation.
+A jet engine doesn't fail without warning — it degrades. Bearings wear, seals leak, compressor efficiency drifts, and long before anything breaks, the sensor data is already telling that story. NASA's C-MAPSS dataset simulates exactly this: turbofan engines run from healthy to failure under realistic flight conditions, with 21 sensor channels recording every cycle along the way.
 
----
+The hard part isn't predicting *that* an engine will fail — it's predicting *when*, and doing it in a way a maintenance engineer can actually trust and act on. A black-box model that says "47 cycles left" with no explanation is not something anyone signs off maintenance decisions against. **EngineWatch is built around that constraint first, accuracy second.**
+
+<br/>
+
+## The thesis
+
+> **Interpretability over benchmark-chasing. No deep learning, ever. No SHAP.**
+
+Every number this system produces is traceable back through a chain of feature engineering a domain expert can audit by hand — PCA-derived health index → rolling degradation trend → cluster-based state → monotonic gradient-boosted RUL. Nothing is explained *after the fact* with a post-hoc approximation; the model is interpretable *by construction*, because its constraints force health-related features to only ever push predictions in the physically correct direction.
+
+The honest cost of that choice: **~18.5 RMSE** on FD001 vs. an estimated ~13 achievable with an LSTM. That gap is the price of a fully traceable inference chain, and it's a deliberate trade, not a limitation the project ran into by accident. The acceptance criterion this project actually optimizes for is **risk–RUL Spearman correlation**, not RMSE or the NASA scoring function — because a system that ranks engines correctly by urgency is more useful to a maintenance planner than one that's marginally more accurate on average and unexplainable.
+
+This also means the system knows its own boundaries. C-MAPSS models a 2-spool turbofan (GE90/PW4090-class); a 3-spool Rolls-Royce Trent architecture is explicitly out of scope, because the intermediate-pressure shaft isn't represented in this data — the system doesn't claim generality it can't back up.
+
+<br/>
+
+## See it live
+
+**[enginewatch.tech](https://enginewatch.tech)**
+
+<div align="center">
+<img src="assets/screenshot-fleet-command.png" alt="Fleet Command dashboard — fleet-wide risk overview" width="850"/>
+<br/><sub><em>Fleet Command — fleet-at-a-glance risk ranking across all monitored engines</em></sub>
+</div>
+
+<br/>
+
+<div align="center">
+<img src="assets/screenshot-engine-drilldown.png" alt="Engine Drill-Down — per-engine diagnostic split screen" width="850"/>
+<br/><sub><em>Engine Drill-Down — plain-language narration alongside the full interpretability trail for a single engine</em></sub>
+</div>
+
+> *(Screenshots captured live from enginewatch.tech.)*
+
+<br/>
+
+## What it produces, per engine
+
+| Output | What it means |
+|---|---|
+| **Health Index** | PCA-derived degradation signal, healthy → critical |
+| **Health Velocity** | Rate of decline per cycle — is it getting worse, and how fast |
+| **Health Variability** | Instability signal that tends to precede failure |
+| **Cluster state** | Healthy / Degrading / Critical, via KMeans (k=3) |
+| **Risk Score** | Normalized [0,1] distance metric, fit on train data only |
+| **RUL Prediction** | Remaining useful life in cycles, with a confidence interval |
+| **Sensor contributions** | Which of the 21 sensors are actually driving the score |
+| **Anomaly flag** | Whether this engine looks like anything the model has seen before |
+| **Plain-language narration** | The same output, explained in a sentence a non-specialist can read |
+
+At the fleet level: cross-engine risk ranking, trend analytics, and shift-handover summaries — so the question isn't just "how is this one engine doing" but "which five engines does the maintenance team need to look at this week."
+
+### Level 2: Engine Drill-Down
+
+The shipped Level 2 engine drill-down view provides:
+- **A comprehension layer**: a verdict headline that leads with status (e.g. "Engine 34 is CRITICAL — likely to fail in about 4 flights"), framed "Why is this critical?" narration, and a pinned action-closure line (e.g. "→ Schedule inspection within ~4 flights").
+- **Interactive cutaway affordances** on the engine visualization (click-to-select rather than hover, with a Clear button).
+- **Level 1 EngineSelector + clickable AnomalyScatter**, making the drill-down reachable for all engines, not just Critical ones.
+- **Strict semantic color system**: red = risk only, amber = caution only, green = healthy only, one neutral accent for everything else.
+- **Depth-only tooltips**: tooltips are never load-bearing for understanding the page.
+
+<br/>
 
 ## Architecture
 
-```text
-Raw Telemetry (26 cols, FD001–FD004)
-    ↓
-Preprocessing (flat sensor removal, StandardScaler)
-Regime Normalization (RegimeScaler — load-bearing for FD002/FD004, degenerates to 1 regime for FD001/FD003)
-    ↓
-PCA Health Index
-    ↓
-Health Velocity (rolling linear regression slope)
-Health Variability (rolling std, normalised)
-    ↓
-KMeans Clustering (k=3)
-    ↓
-Risk Score — d = 1 - HI_hpc, normalized (d - d_min) / (d_max - d_min), fit on train only
-    ↓
-RUL Prediction — Monotonic HistGradientBoostingRegressor (sklearn 1.4.2)
-  monotonic constraints: [health_index: 1, HI_velocity: 0, HI_variability: -1, risk_score: -1]
-  RandomForest retained for confidence intervals only, never as point-prediction
-    ↓
-Pre-computed artifact cache (models/{dataset_id}/rul_artifacts.joblib)
-    ↓
-FastAPI backend (zero live recomputation) → React/Vite/TypeScript frontend
-```
+<div align="center">
+<img src="assets/architecture.svg" alt="EngineWatch inference pipeline — raw telemetry to interpretable risk state" width="950"/>
+</div>
 
-**Fault-mode routing:** HPC-only for all four datasets (`n_fault_modes_by_dataset: 1` everywhere). The dual-axis (HPC + Fan) code path is architecturally real and correct but currently inert in production — re-verified empirically that the fan-degradation axis is genuinely non-predictive for FD003/FD004 (Spearman 0.032 / 0.114) even after fixing two latent bugs found during that investigation. Reactivating it is a deliberate, not-yet-made decision — never re-enable without an explicit brief.
+**Fault-mode routing** currently runs HPC-only across all four datasets (`n_fault_modes_by_dataset: 1`). The dual-axis (HPC + Fan-degradation) code path exists in the repo, is architecturally correct, and is currently inert by design — an empirical investigation confirmed the fan-degradation axis is genuinely non-predictive for FD003/FD004 (Spearman 0.032 / 0.114) even after fixing two latent bugs uncovered during that work. Reactivating it is a real, not-yet-made decision, not an oversight.
 
----
+**Regime normalization** (`RegimeScaler`) is load-bearing for FD002 and FD004, which each have 6 distinct operating regimes; it degenerates gracefully to a single regime for FD001/FD003.
 
-## Key Results — Canonical Metric Table (HPC-only, verified)
+**Every API response is served from a pre-computed artifact cache** — `models/{dataset_id}/rul_artifacts.joblib` — so there is zero live ML computation at request time. The pipeline above runs at training/cache-build time, not at serve time.
 
-**Acceptance criterion is risk–RUL Spearman correlation, not NASA score or RMSE alone** — the deliberate trade-off is a traceable inference chain over benchmark-chasing.
+<br/>
 
-| Dataset | Best Model | RMSE | NASA Score | Risk–RUL Spearman |
+## Results — canonical metric table
+
+Verified against `config/canonical_gate.json`, the single source of truth this repo's CI checks against on a schedule.
+
+| Dataset | Model | RMSE | NASA Score | Risk–RUL Spearman |
 |---|---|---|---|---|
-| FD001 | HistGBR (monotonic) | 18.459 | 617.5 | −0.750 |
-| FD002 | HistGBR (monotonic) | 31.125 | 13,635 | −0.765 |
-| FD003 | HistGBR (monotonic) | 22.798 | 1,995.7 | −0.816 |
-| FD004 | HistGBR (monotonic) | 34.410 | 53,028 | −0.736 |
+| FD001 | HistGBR (monotonic) | 18.459 | 617.5 | **−0.750** |
+| FD002 | HistGBR (monotonic) | 31.125 | 13,635 | **−0.765** |
+| FD003 | HistGBR (monotonic) | 22.798 | 1,995.7 | **−0.816** |
+| FD004 | HistGBR (monotonic) | 34.410 | 53,028 | **−0.736** |
 
-FD002/FD004 are documented weaker points, not clean wins — FD002 clustering silhouette (0.284) sits below the 0.30 threshold and is a disclosed limitation, not a bug.
+FD002 and FD004 are the harder datasets here, and the README says so on purpose — FD002's clustering silhouette (0.284) sits below the 0.30 target, disclosed as a known limitation rather than smoothed over. A system that only reports its best numbers isn't actually interpretable, it's just quieter about the parts that don't work as well.
 
-**Canonical gate (Engine 34 / FD001, checked on every deploy):**
-
+**Canonical regression gate** — Engine 34 / FD001, re-checked automatically on every deploy:
 ```
 risk_score:    0.7402876566726511
 rul_cycles:    3.698652753342952
@@ -79,57 +119,45 @@ risk_state:    Critical
 rmse:          18.459221643626265
 ```
 
-Single source of truth: `config/canonical_gate.json`, consumed directly by `ci-live-gate.yml`. If any document (including this README) disagrees with that file, the file is correct.
+<br/>
 
----
+## How this was engineered
 
-## Why Not Deep Learning?
+Solo build, end to end — ML pipeline, FastAPI backend, React/TypeScript frontend, and cloud deployment, all designed and shipped by one person. Getting there involved coordinating multiple AI coding tools without letting any of them quietly drift from the architecture, which turned into its own piece of engineering discipline worth documenting.
 
-A deliberate architectural decision, not a limitation:
+**The split:**
 
-1. **Dataset size** — ~20K rows per dataset, ~100 engines. Insufficient for reliable LSTM/Transformer training.
-2. **Physics** — HPC degradation follows a known decay pattern captured well by PCA + monotonic gradient boosting.
-3. **Interpretability** — every prediction has a traceable, explainable inference chain. No SHAP either — SHAP is a post-hoc approximation; this system is interpretable by construction (monotonic constraints + linear health-index decomposition), not explained after the fact.
-4. **Deployment** — classical models are lighter, auditable, and reproducible without GPU infrastructure.
-5. **Model scope discipline** — C-MAPSS models a 2-spool turbofan (GE90/PW4090-class). A 3-spool Rolls-Royce Trent architecture is explicitly out of scope for this dataset, since the intermediate-pressure shaft isn't modeled — the system does not claim generality beyond what the data supports.
+| Tool | Role |
+|---|---|
+| **Claude** | Architecture, correctness sign-off, and brief-writing — ~90% of the reasoning work |
+| **Antigravity** (Google) | Executes structured briefs for backend/ML/deploy and frontend work |
+| **Claude Code** | Reasoning-heavy or cross-cutting execution from the terminal |
+| **Claude Cowork** | Narrow, pre-scoped, report-only overnight/batch tasks |
+| **GitHub Copilot** | Inline mechanical work only — renames, lint, boilerplate |
+| **Gemini 2.5 Flash** | Runtime narration only — never load-bearing for correctness |
 
-The accepted cost: higher RMSE (~18.5 vs. ~13 achievable with an LSTM on FD001) in exchange for a fully traceable, monotonic, auditable inference chain.
+The governing rule across all of it: **a tool's own summary of what it did is a claim to verify, not a fact to accept.** Every non-trivial change gets checked against a real diff, a real `curl` response, or a real terminal output before it's trusted — a discipline that has caught real regressions in this project, including silent test-data leakage in a fallback branch, a droplet silently running an unversioned build behind a correct-looking API response, and an unscoped glob delete that took out 11 tracked files along with the scratch files it was meant to remove.
 
----
+That discipline is written down, not just remembered — `AGENTS.md` at the repo root is the shared contract every agent reads, backed by an automated CI layer (`ci-static.yml` on every PR, `ci-live-gate.yml` hitting production every 6 hours, `/api/version` turning "is the server running what I think" into a `curl` instead of an SSH session) and a set of regression test prompts, each one written after a real incident, re-run cold after any change to the contract itself.
 
-## Deployment & Infrastructure
+<br/>
 
-- **Backend:** FastAPI + uvicorn, `systemd` service `enginewatch`, fully cache-backed
-- **Frontend:** React / Vite / TypeScript / Tailwind / Recharts, hand-rolled routing (~25 lines, zero new dependencies)
-- **Reverse proxy:** Caddy, Let's Encrypt SSL, `enginewatch.tech`
-- **Host:** DigitalOcean droplet (2GB/1vCPU), 2GB swap file active
-- **Artifacts:** `models/{dataset_id}/rul_artifacts.joblib` (100–330MB each), deployed via `rsync`, not git (gitignored — exceeds GitHub's 100MB limit)
-- **Deploy verification:** `/api/version` returns the deployed git commit hash; `ci-live-gate.yml` hits production on a schedule and hard-fails if unreachable; manual browser fresh-viewer check is still required per `DEPLOY.md` and is not replaced by automation
+## Environment
 
-## CI Automation
+Model artifacts are version-sensitive — train and serve inside the same environment or the joblib files won't load correctly.
 
-- **`ci-static.yml`** — runs on every PR: AST-based `dataset_id` threading check, exact dependency pinning, regime-config duplication check, cache-tracking correctness
-- **`ci-live-gate.yml`** — scheduled every 6 hours (and manually triggerable): hits production directly, validates against `config/canonical_gate.json`
-- **`/api/version`** — makes "is the droplet running what I think" a `curl`, not an SSH session
+```bash
+source ../.venvs/project-2/bin/activate   # venv lives one directory above the repo root
 
-## AI Coordination Contract
+which python                               # always verify before trusting any measurement
+pip show scikit-learn numpy joblib
+```
 
-This project is built with a documented multi-agent workflow, not ad hoc prompting:
+Pinned: **Python 3.12 · scikit-learn 1.4.2 · numpy 1.26.4 · joblib 1.4.2**
 
-- **Claude** (this assistant) — architecture, correctness sign-off, brief authoring (~90% of reasoning work)
-- **Antigravity** (Google, Gemini-based agentic IDE) — executes structured briefs for backend/ML/deploy and frontend work; reads `AGENTS.md` and auto-discovers `.agents/skills/`
-- **Claude Code** (Anthropic CLI agent) — reasoning-heavy/cross-cutting execution; reads `CLAUDE.md` (includes `AGENTS.md`), no access to `.agents/skills/`
-- **Claude Cowork** (Anthropic, autonomous batch agent) — narrow, pre-scoped, report-only-by-default tasks; does not auto-read `AGENTS.md`, constraints must be inline in the prompt
-- **GitHub Copilot** — inline mechanical work only (renames, lint, boilerplate)
-- **Gemini 2.5 Flash** — narration runtime only, never load-bearing for correctness
+<br/>
 
-Governing documents: `AGENTS.md` (repo root), `CLAUDE.md`, `.github/copilot-instructions.md`, `.agents/skills/`, `.agents/test-prompts.md` (five regression tests, each grounded in a real caught incident, re-run cold after any contract change).
-
-**Verification discipline:** "looks right," "confirmed working," and "deployment complete" are claims to check against real diff/curl/terminal output, never accepted as prose summaries — this pattern has caught multiple real regressions in production.
-
----
-
-## Project Structure
+## Project structure
 
 ```text
 data/           load.py, preprocess.py, regime.py (RegimeScaler)
@@ -137,55 +165,35 @@ features/       health_index.py, velocity.py, variability.py
 model/          clustering.py, risk.py, rul.py, fault_classifier.py
 evaluation/     validation.py
 app/            FastAPI backend, endpoint routers
-frontend/       React/Vite/TypeScript — Fleet Command (Level 1), Engine Drill-Down (Level 2)
+frontend/       React / Vite / TypeScript — Fleet Command, Engine Drill-Down
 config/         config.yaml, canonical_gate.json
 scripts/        deployment + data pipeline utilities
-.agents/        skills/, test-prompts.md (Antigravity-only, auto-discovered)
+.agents/        skills/, test-prompts.md
 AGENTS.md       shared multi-agent operating contract
-CLAUDE.md       Claude Code entry point (includes AGENTS.md)
 DEPLOY.md       authoritative manual deployment process
 ```
 
----
-
-## Environment & Model Artifacts
-
-Model artifacts are version-sensitive. Train and run the backend inside the same project virtual environment so joblib files are created and loaded against the same Python/scikit-learn stack.
-
-```bash
-# venv lives one directory above the repo root
-source ../.venvs/project-2/bin/activate
-
-# Always verify before trusting any measurement:
-which python
-pip show scikit-learn numpy joblib
-```
-
-Pinned versions: Python 3.12, scikit-learn 1.4.2, numpy 1.26.4, joblib 1.4.2.
-
-Do not mix interpreters between training and serving. Never reuse a shell session where `source .../activate` previously failed — abandon it and open a fresh terminal; stale env vars silently corrupt subsequent `which python` / `pip show` output.
-
----
+<br/>
 
 ## Dataset
 
-NASA CMAPSS FD001–FD004 — single- and multi-operating-condition turbofan degradation data, HPC fault mode (as currently routed in production).
+NASA C-MAPSS FD001–FD004 — turbofan run-to-failure simulation data across single- and multi-operating-condition scenarios.
 
-Reference: Saxena et al., *Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation*, PHM 2008.
+> A. Saxena, K. Goebel, D. Simon, N. Eklund, *"Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation,"* PHM 2008.
 
----
+<br/>
 
 ## Status
 
-**v3.0 — Deployed, multi-dataset, fleet analytics live, AI coordination contract formalized, CI automation live.**
+**v3.0** — deployed, all four datasets live, fleet analytics shipped, full CI automation, formal multi-agent coordination contract.
 
-- ✅ Full FD001–FD004 pipeline, HPC-only monotonic HistGBR, live at enginewatch.tech
-- ✅ Zero-live-recompute API surface across all endpoints
-- ✅ Fleet-level analytics, agentic narration layer
-- ✅ Full CI automation (`ci-static.yml`, `ci-live-gate.yml`, `/api/version`)
-- ✅ Formal multi-agent coordination contract (`AGENTS.md`, `.agents/`)
-- ✅ Frontend Level 1 (Fleet Command) shipped and live
-- 🔄 Frontend Level 2 (Engine Drill-Down split-screen) — code-complete locally, not yet pushed/deployed; primary open item blocking the EngineWatch Stability Gate
-- ⚪ AeroGraph (aviation knowledge-graph platform) — blueprint stage only, gated on the Stability Gate, not a committed date
+- ✅ FD001–FD004 pipeline live at [enginewatch.tech](https://enginewatch.tech), zero live recompute
+- ✅ Fleet-level analytics and agentic narration
+- ✅ CI automation (`ci-static.yml`, `ci-live-gate.yml`, `/api/version`)
+- ✅ Fleet Command (Level 1 frontend) shipped
+- ✅ Engine Drill-Down split-screen (Level 2) — shipped and live
+- ⚪ AeroGraph — aviation knowledge-graph platform bridging this project with flight-logistics data — blueprint stage, gated on stability, not a committed date
 
-Superseded — do not cite: any RMSE/NASA figures outside the canonical table above, any "dual-axis live" claim, any FD004 improvement-percentage figures. See `AGENTS.md` for the full dead-numbers list and incident history behind each hard constraint.
+<sub>Full incident history, dead-number list, and hard architectural constraints live in `AGENTS.md`.</sub>
+
+</div>
