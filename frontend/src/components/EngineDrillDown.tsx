@@ -40,7 +40,7 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
 
   if (engineLoading || !engineData) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-bg">
+      <div className="h-full w-full flex items-center justify-center bg-bg">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-muted"></div>
       </div>
     );
@@ -61,8 +61,8 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
   };
 
   return (
-    <div className="h-screen grid grid-cols-[35%_65%] overflow-hidden">
-      <div className="h-screen overflow-y-auto border-r border-border p-6 flex flex-col gap-5">
+    <div className="h-full grid grid-cols-[35%_65%] overflow-hidden">
+      <div className="h-full overflow-y-auto border-r border-border p-6 flex flex-col gap-5">
         <button onClick={onBack} className="text-sm text-muted hover:text-text w-fit flex items-center gap-1">
           ← Back to Fleet Command
         </button>
@@ -101,7 +101,7 @@ export default function EngineDrillDown({ engineId, datasetId, onBack }: EngineD
         </div>
       </div>
 
-      <div className="h-screen overflow-y-auto p-6 flex flex-col gap-5">
+      <div className="h-full overflow-y-auto p-6 flex flex-col gap-5">
         <StatStrip data={engineData} />
 
         <div className="flex items-center justify-between">

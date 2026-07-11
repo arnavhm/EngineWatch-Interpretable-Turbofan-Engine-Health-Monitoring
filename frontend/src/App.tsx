@@ -28,18 +28,21 @@ function App() {
     setRoute({ view: 'fleet', engineId: null });
   };
 
-  return (
+  return route.view === 'engine' && route.engineId !== null ? (
+    <div className="h-screen flex flex-col bg-bg text-text font-sans overflow-hidden">
+      <TopBar />
+      <div className="flex-1 min-h-0">
+        <EngineDrillDown engineId={route.engineId} datasetId={selectedDataset} onBack={goToFleet} />
+      </div>
+    </div>
+  ) : (
     <div className="min-h-screen bg-bg text-text font-sans overflow-x-hidden">
       <TopBar />
-      {route.view === 'engine' && route.engineId !== null ? (
-        <EngineDrillDown engineId={route.engineId} datasetId={selectedDataset} onBack={goToFleet} />
-      ) : (
-        <FleetCommand
-          selectedDataset={selectedDataset}
-          setSelectedDataset={setSelectedDataset}
-          onSelectEngine={goToEngine}
-        />
-      )}
+      <FleetCommand
+        selectedDataset={selectedDataset}
+        setSelectedDataset={setSelectedDataset}
+        onSelectEngine={goToEngine}
+      />
     </div>
   );
 }
