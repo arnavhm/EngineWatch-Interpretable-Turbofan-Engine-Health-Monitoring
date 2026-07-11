@@ -29,7 +29,7 @@ function App() {
   };
 
   return route.view === 'engine' && route.engineId !== null ? (
-    <div className="h-screen flex flex-col bg-bg text-text font-sans overflow-hidden">
+    <div className="min-h-screen md:h-screen flex flex-col bg-bg text-text font-sans overflow-x-hidden md:overflow-hidden">
       <TopBar />
       <div className="flex-1 min-h-0">
         <EngineDrillDown engineId={route.engineId} datasetId={selectedDataset} onBack={goToFleet} />

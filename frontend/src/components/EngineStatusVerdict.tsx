@@ -92,7 +92,7 @@ export default function EngineStatusVerdict({
         ENGINE {engineId} · {datasetId.toUpperCase()}
       </div>
 
-      <div className="text-2xl font-semibold leading-snug text-text mt-2">{headline}</div>
+      <div className="text-xl md:text-2xl font-semibold leading-snug text-text mt-2">{headline}</div>
 
       <div className="text-xs font-mono text-faint mt-2">
         RUL {rul_cycles.toFixed(1)} · RISK {risk_score.toFixed(2)} · CI {ci_lower.toFixed(1)}–
