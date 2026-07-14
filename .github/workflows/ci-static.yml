@@ -1,6 +1,12 @@
 name: CI Static Checks
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "requirements.txt"
+      - ".github/workflows/ci-static.yml"
   pull_request:
     paths:
       - "**.py"
