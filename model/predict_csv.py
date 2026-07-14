@@ -16,7 +16,7 @@ import pandas as pd
 from app.utils.rul_artifacts import _load_rul_artifacts_uncached
 from data.load import load_config
 from data.preprocess import preprocess_test
-from features.health_index import apply_dual_health_index
+from features.health_index import apply_dual_health_index, assign_operative_features
 from features.variability import compute_variability
 from features.velocity import compute_velocity
 from model.clustering import apply_clustering_per_fault_mode
@@ -70,12 +70,12 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
         raw_df, config, scaler, persist_outputs=False
     )  # no disk side-effects
     hi = apply_dual_health_index(proc, pca_by_axis, hi_scaler_by_axis, config)
-    hi["health_index"] = hi["HI_hpc"]  # legacy alias (build_health_index L663)
     vel = compute_velocity(hi, config)  # stateless slopes
     var, _ = compute_variability(
         vel, config, artifacts=var_artifacts
     )  # persisted bounds
     classified = classify_engines(var, fault_clf, config)  # persisted classifier
+    classified = assign_operative_features(classified)
     clustered = apply_clustering_per_fault_mode(classified, cluster_by_fault)
     scored = apply_risk_score_per_fault_mode(clustered, cluster_by_fault, risk_by_fault)
 

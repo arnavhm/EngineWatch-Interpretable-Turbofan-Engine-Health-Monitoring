@@ -41,7 +41,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from data.load import load_config, load_dataset
 from data.preprocess import preprocess_test, preprocess_train
 from features.health_index import (apply_dual_health_index,
-                                   build_dual_health_index)
+                                   build_dual_health_index,
+                                   assign_operative_features)
 from features.variability import build_variability
 from features.velocity import build_velocity
 from model.clustering import build_clustering_per_fault_mode
@@ -216,9 +217,6 @@ def main() -> None:
             hi_scaler_by_axis,
             config,
         )
-        train_hi["health_index"] = train_hi["HI_hpc"]
-        test_hi["health_index"] = test_hi["HI_hpc"]
-
         hi_artifact_dir = Path("models") / dataset_id
         hi_artifact_dir.mkdir(parents=True, exist_ok=True)
         joblib.dump(hi_pca_by_axis, hi_artifact_dir / "hi_pca_by_axis.joblib")
@@ -235,6 +233,9 @@ def main() -> None:
         fault_artifacts = fit_fault_classifier(train_var, config)
         train_var = classify_engines(train_var, fault_artifacts, config)
         test_var = classify_engines(test_var, fault_artifacts, config)
+
+        train_var = assign_operative_features(train_var)
+        test_var = assign_operative_features(test_var)
 
         joblib.dump(fault_artifacts, hi_artifact_dir / "fault_classifier.joblib")
 

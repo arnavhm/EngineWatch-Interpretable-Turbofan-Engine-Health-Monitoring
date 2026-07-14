@@ -590,6 +590,8 @@ def build_dual_health_index(
         pca_by_axis[axis_name] = pca
         scaler_by_axis[axis_name] = scaler
 
+
+
     return result, pca_by_axis, scaler_by_axis
 
 
@@ -636,6 +638,8 @@ def apply_dual_health_index(
         )
         result[f"HI_{axis_name}"] = np.clip(hi_values, 0.0, 1.0)
 
+
+
     return result
 
 
@@ -675,11 +679,12 @@ def build_health_index(
     """Backward-compatible health-index builder.
 
     Purpose:
-        Build dual HI axes and expose legacy `health_index` as `HI_hpc`.
+        Build dual HI axes (HI_hpc, HI_fan). Does not set the canonical health_index column — 
+        that's assigned downstream by assign_operative_features() after fault classification.
     Input shape:
         train_df/test_df with scaled sensors + unit + cycle.
     Output shape:
-        train/test DataFrames containing HI_hpc, HI_fan, and health_index.
+        train/test DataFrames containing HI_hpc and HI_fan.
         HealthIndexArtifacts populated from the HPC axis for legacy consumers.
     Assumptions:
         Dual-axis configuration is present under health_index.axes.

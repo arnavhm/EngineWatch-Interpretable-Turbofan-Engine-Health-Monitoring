@@ -150,10 +150,12 @@ def test_health_index_fit_transform_and_transform_bounds() -> None:
 
     train_hi, test_hi, artifacts = build_health_index(train_df, test_df, config)
 
-    assert "health_index" in train_hi.columns
-    assert "health_index" in test_hi.columns
-    assert train_hi["health_index"].between(0.0, 1.0).all()
-    assert test_hi["health_index"].between(0.0, 1.0).all()
+    assert "HI_hpc" in train_hi.columns
+    assert "HI_fan" in train_hi.columns
+    assert "HI_hpc" in test_hi.columns
+    assert "HI_fan" in test_hi.columns
+    assert train_hi["HI_hpc"].between(0.0, 1.0).all()
+    assert test_hi["HI_hpc"].between(0.0, 1.0).all()
     assert artifacts.explained_variance_ratio > 0.0
 
 
@@ -234,7 +236,7 @@ def test_artifact_loader_raises_when_no_artifact_available(
         lambda _: [tmp_path / "missing_models" / "rul_artifacts.joblib"],
     )
 
-    with pytest.raises(RuntimeError, match="Dashboard runtime does not retrain models"):
+    with pytest.raises(FileNotFoundError, match="Dashboard runtime does not retrain models"):
         rul_artifacts_module.load_or_rebuild_rul_artifacts(
             dataset_id="nonexistent_dataset"
         )

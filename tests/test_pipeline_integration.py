@@ -3,11 +3,12 @@ import pytest
 
 from data.load import load_config, load_dataset
 from data.preprocess import preprocess_test, preprocess_train
-from features.health_index import build_health_index
+from features.health_index import build_health_index, assign_operative_features
 from features.variability import build_variability
 from features.velocity import build_velocity
-from model.clustering import build_clustering
-from model.risk import build_risk_score
+from model.clustering import build_clustering_per_fault_mode
+from model.fault_classifier import classify_engines, fit_fault_classifier
+from model.risk import build_risk_score_per_fault_mode
 
 REQUIRED_TRAIN_COLUMNS = [
     "unit",
@@ -45,8 +46,18 @@ def fd001_pipeline_output():
     train_hi, test_hi, _ = build_health_index(train_proc, test_proc, config)
     train_vel, test_vel, _ = build_velocity(train_hi, test_hi, config)
     train_var, test_var, _ = build_variability(train_vel, test_vel, config)
-    train_cl, test_cl, cl_art = build_clustering(train_var, test_var, config)
-    train_rs, test_rs, _ = build_risk_score(train_cl, test_cl, cl_art)
+    fault_artifacts = fit_fault_classifier(train_var, config)
+    train_var = classify_engines(train_var, fault_artifacts, config)
+    test_var = classify_engines(test_var, fault_artifacts, config)
+    train_var = assign_operative_features(train_var)
+    test_var = assign_operative_features(test_var)
+
+    train_cl, test_cl, clusterers_by_mode = build_clustering_per_fault_mode(
+        train_var, test_var, config
+    )
+    train_rs, test_rs, _ = build_risk_score_per_fault_mode(
+        train_cl, test_cl, clusterers_by_mode
+    )
     return train_rs, test_rs
 
 

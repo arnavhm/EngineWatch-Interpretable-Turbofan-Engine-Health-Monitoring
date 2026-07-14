@@ -2,9 +2,15 @@
 import pandas as pd
 import pytest
 
+from pathlib import Path
+
 from model.predict import predict_engine
 
+has_fd001_artifacts = Path("models/FD001/rul_artifacts.joblib").exists()
+missing_artifacts_reason = "RUL artifacts for FD001 are missing. Run scripts/train_all_datasets.py or scripts/train_rul_artifacts.py first."
 
+
+@pytest.mark.skipif(not has_fd001_artifacts, reason=missing_artifacts_reason)
 def test_predict_engine_success():
     # Construct a sample DataFrame representing one cycle of an engine
     df = pd.DataFrame(
@@ -71,6 +77,7 @@ def test_predict_engine_empty_dataframe():
     assert "engine_df is empty" in str(exc_info.value)
 
 
+@pytest.mark.skipif(not has_fd001_artifacts, reason=missing_artifacts_reason)
 def test_predict_engine_by_id_success():
     from model.predict import predict_engine_by_id
 
@@ -86,6 +93,7 @@ def test_predict_engine_by_id_success():
     assert "risk_state" in result
 
 
+@pytest.mark.skipif(not has_fd001_artifacts, reason=missing_artifacts_reason)
 def test_predict_engine_by_id_invalid_id():
     from model.predict import predict_engine_by_id
 
