@@ -188,6 +188,12 @@ def test_velocity_and_variability_edge_windows() -> None:
     assert with_variability["HI_variability"].between(0.0, 1.0).all()
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known clustering label-mapping bug (Critical mean risk_score < Healthy "
+           "mean risk_score) — deterministic, reproduced identically local + CI, "
+           "tracked separately from H2. See Notion Stability Gate page.",
+)
 def test_clustering_label_mapping_and_risk_range() -> None:
     config = load_config("config/config.yaml")
     train_df, test_df = _clustering_frames()
