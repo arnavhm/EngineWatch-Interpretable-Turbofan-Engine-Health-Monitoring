@@ -43,6 +43,11 @@ def predict_engine(engine_df: pd.DataFrame, dataset_id: str = "FD001") -> dict:
     if engine_df.empty:
         raise ValueError("engine_df is empty — no cycles to predict on")
 
+    required_columns = set(FEATURE_COLUMNS) | {"unit", "health_index", "risk_score", "risk_state"}
+    missing = required_columns - set(engine_df.columns)
+    if missing:
+        raise KeyError(f"engine_df is missing required column(s): {sorted(missing)}")
+
     artifacts = _load_rul_artifacts_uncached(dataset_id=dataset_id)
     model = artifacts.best_model
 
