@@ -11,6 +11,7 @@ import pandas as pd
 
 from app.utils.data_loader import load_pipeline_data, load_pipeline_data_uncached
 from app.utils.rul_artifacts import _load_rul_artifacts_uncached
+from model.rul import MODEL_DISPLAY_NAMES
 
 FEATURE_COLUMNS = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
 
@@ -86,7 +87,9 @@ def predict_engine(engine_df: pd.DataFrame, dataset_id: str = "FD001") -> dict:
         "ci_lower": ci_lower,
         "ci_upper": ci_upper,
         "ci_std": ci_std,
-        "model_name": artifacts.best_model_name,
+        "model_name": MODEL_DISPLAY_NAMES.get(
+            artifacts.best_model_name, artifacts.best_model_name
+        ),
         "rmse": float(artifacts.evaluation_metrics[artifacts.best_model_name]["rmse"]),
     }
 

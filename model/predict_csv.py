@@ -20,12 +20,10 @@ from features.health_index import apply_dual_health_index, assign_operative_feat
 from features.variability import compute_variability
 from features.velocity import compute_velocity
 from model.clustering import apply_clustering_per_fault_mode
-# classify_engines lives in the fault-classification module — adjust this import
-# to its real location (you referenced it as classify_engines).
-from model.fault_classifier import \
-    classify_engines  # TODO: confirm module path
+from model.fault_classifier import classify_engines
 from model.predict import FEATURE_COLUMNS, _compute_rf_ci
 from model.risk import apply_risk_score_per_fault_mode
+from model.rul import MODEL_DISPLAY_NAMES
 
 MIN_CYCLES = 20  # velocity/variability rolling window; last row needs >= this history
 
@@ -83,8 +81,9 @@ def predict_csv(raw_df: pd.DataFrame, dataset_id: str = "FD001") -> list[dict]:
     artifacts = _load_rul_artifacts_uncached(dataset_id=dataset_id)
     model = artifacts.best_model
     rf_model = artifacts.all_models.get("random_forest")
-    model_name = artifacts.best_model_name
-    rmse = float(artifacts.evaluation_metrics[model_name]["rmse"])
+    model_key = artifacts.best_model_name
+    model_name = MODEL_DISPLAY_NAMES.get(model_key, model_key)
+    rmse = float(artifacts.evaluation_metrics[model_key]["rmse"])
 
     results: list[dict] = []
     for engine_id, g in scored.groupby("unit"):

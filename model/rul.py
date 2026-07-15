@@ -60,6 +60,18 @@ from sklearn.metrics import mean_squared_error
 # Feature columns - must match pipeline output exactly
 RUL_FEATURES = ["health_index", "HI_velocity", "HI_variability", "risk_score"]
 
+# Internal model-registry key -> human-readable display name.
+# Keys must match the `models` dict built in _train_models() exactly.
+# "gradient_boosting" is deliberately NOT shortened to "Gradient Boosting" here:
+# the full name states the monotonic constraint explicitly, which is the point —
+# it's the mechanism that makes the RUL model's behavior physically interpretable
+# (RUL can only decrease as health degrades), not an incidental implementation detail.
+MODEL_DISPLAY_NAMES = {
+    "linear_regression": "Linear Regression",
+    "random_forest": "Random Forest",
+    "gradient_boosting": "Monotonic HistGradientBoostingRegressor",
+}
+
 
 def _compute_piecewise_rul(
     train_df: pd.DataFrame,
