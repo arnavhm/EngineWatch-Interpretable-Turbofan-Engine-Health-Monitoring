@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.utils.data_loader import load_pipeline_data_uncached
 from data.load import load_config, load_dataset
-from model.rul import build_rul_model
+from model.rul import MODEL_DISPLAY_NAMES, build_rul_model
 
 
 def _attach_test_rul(test_df: pd.DataFrame, rul_offsets: pd.Series) -> pd.DataFrame:
@@ -80,6 +80,7 @@ def main(dataset_id: str = "FD001") -> None:
     predictions_df, artifacts = build_rul_model(train_rs, test_with_rul, config)
 
     best = artifacts.best_model_name
+    best_display = MODEL_DISPLAY_NAMES.get(best, best)
     rmse = float(artifacts.evaluation_metrics[best]["rmse"])
     print(f"[train] Best model: {best}  RMSE: {rmse:.3f}")
 
@@ -148,7 +149,7 @@ def main(dataset_id: str = "FD001") -> None:
             "ci_lower": ci_lower,
             "ci_upper": ci_upper,
             "ci_std": ci_std,
-            "model_name": best,
+            "model_name": best_display,
             "rmse": rmse,
         }
         per_engine[engine_id] = pred_dict
